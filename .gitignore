@@ -172,3 +172,5 @@ cython_debug/
 
 # Also
 complete-architecture.md 
+cvs/*
+explications.md
