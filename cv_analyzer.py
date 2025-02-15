@@ -131,6 +131,7 @@ class CVAnalyzer:
             keyword_counts[original_keyword] = count
         
         return keyword_counts
+    
     def calculate_score(self, keyword_counts: Dict[str, int]) -> float:
         """
         Calcule le score final basé sur les occurrences et les pourcentages
@@ -171,6 +172,77 @@ class CVAnalyzer:
         
         # Tri des résultats par score décroissant
         return sorted(results, key=lambda x: x.score, reverse=True)
+    
+    def generate_markdown_report(self, results: List[ScoredCV], output_file: str = "rapport_analyse_cv.md") -> None:
+        """
+        Génère un rapport détaillé au format Markdown avec les résultats de l'analyse
+        
+        Args:
+            results: Liste des CVs analysés et leurs scores
+            output_file: Nom du fichier de sortie (par défaut: rapport_analyse_cv.md)
+        """
+        current_date = "15 février 2025"  # Date fixe basée sur le contexte
+        
+        # Création du contenu du rapport
+        report = [
+            "# Rapport d'Analyse des CV\n",
+            f"*Généré le {current_date}*\n",
+            "\n## Résumé\n",
+            f"- Nombre total de CV analysés: **{len(results)}**",
+            f"- Score moyen: **{sum(cv.score for cv in results) / len(results):.1f}%**",
+            f"- Meilleur score: **{max(cv.score for cv in results):.1f}%**\n",
+            "\n## Critères d'évaluation\n",
+            "| Compétence | Pondération |",
+            "|------------|-------------|",
+        ]
+        
+        # Ajouter les critères d'évaluation
+        for keyword, weight in self.keywords_original.items():
+            report.append(f"| {keyword} | {weight}% |")
+            
+        # Ajouter le top 3 des candidats
+        report.extend([
+            "\n## Top 3 des Candidats\n",
+        ])
+        
+        for i, cv in enumerate(results[:3], 1):
+            emoji = "" if i == 1 else "" if i == 2 else ""
+            report.extend([
+                f"### {emoji} {cv.filename} ({cv.score:.1f}%)\n",
+                "| Compétence | Occurrences | Points |",
+                "|------------|-------------|---------|",
+            ])
+            for keyword, count in cv.found_keywords.items():
+                if count > 0:
+                    points = self.keywords_original[keyword]
+                    report.append(f"| {keyword} | {count} | {points}% |")
+            report.append("\n")
+            
+        # Ajouter les résultats détaillés
+        report.extend([
+            "## Résultats Détaillés\n",
+            "| Position | Candidat | Score | Compétences Clés |",
+            "|----------|----------|--------|------------------|",
+        ])
+        
+        for i, cv in enumerate(results, 1):
+            key_skills = ", ".join(f"{k} ({c})" for k, c in cv.found_keywords.items() if c > 0)
+            report.append(f"| {i} | {cv.filename} | {cv.score:.1f}% | {key_skills} |")
+            
+        # Ajouter les erreurs de conversion si présentes
+        if self.failed_conversions:
+            report.extend([
+                "\n## Erreurs de Conversion\n",
+                "Les fichiers suivants n'ont pas pu être analysés:\n",
+            ])
+            for filename, error in self.failed_conversions:
+                report.append(f"- {filename}: {error}\n")
+                
+        # Écriture du rapport dans un fichier
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(report))
+            
+        print(f"\nRapport généré avec succès: {output_file}")
 
 def main():
     """Point d'entrée principal du script"""
@@ -180,7 +252,7 @@ def main():
     
     # Vérification du dossier
     if not os.path.exists(pdf_folder):
-        print(f"⚠️ Le dossier {pdf_folder} n'existe pas!")
+        print(f" Le dossier {pdf_folder} n'existe pas!")
         return
         
     keywords = {
@@ -202,7 +274,7 @@ def main():
             print(f"- {pdf_file}")
             
         if not pdf_files:
-            print("⚠️ Aucun fichier PDF trouvé dans le dossier!")
+            print(" Aucun fichier PDF trouvé dans le dossier!")
             return
             
         print("\nMots-clés recherchés:")
@@ -215,7 +287,7 @@ def main():
         results = analyzer.analyze_cvs()
         
         if not results:
-            print("\n⚠️ Aucun CV n'a pu être analysé!")
+            print("\n Aucun CV n'a pu être analysé!")
             return
             
         # Affichage des résultats
@@ -227,11 +299,14 @@ def main():
                 if count > 0:
                     print(f"  - {keyword}: {count} fois ({keywords[keyword]}%)")
         
+        # Générer le rapport Markdown
+        analyzer.generate_markdown_report(results)
+        
         # Affichage des erreurs de conversion
         if analyzer.failed_conversions:
             print("\n=== Erreurs de conversion ===")
             for filename, error in analyzer.failed_conversions:
-                print(f"❌ {filename}: {error}")
+                print(f" {filename}: {error}")
                 
     except Exception as e:
         print(f"Erreur: {str(e)}")

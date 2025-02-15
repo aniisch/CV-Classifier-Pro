@@ -52,12 +52,19 @@ cv-classifier-pro/
 
 ## 🛣️ Roadmap
 
+### MVP0.0 (Version Web)
+- [x] back python
+- [x] lien vers un dossier
+- [x] analyse très basique
+- [x] interface de base avec React et Material-UI
+- [x] génération de rapport Markdown
+
 ### MVP0 (Version Web)
-- [x] Interface de base
-- [x] Import de CV
-- [x] Configuration mots-clés
-- [x] Analyse basique
-- [x] Export CSV
+- [ ] Amélioration de l'interface
+- [ ] Gestion des erreurs avancée
+- [ ] Prévisualisation des CVs
+- [ ] Export CSV/PDF
+- [ ] Historique des analyses
 
 ### Version 1.0 (Desktop)
 - [ ] Conversion Electron

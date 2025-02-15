@@ -174,3 +174,4 @@ cython_debug/
 complete-architecture.md 
 cvs/*
 explications.md
+node_modules
