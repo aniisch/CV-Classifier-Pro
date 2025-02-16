@@ -60,8 +60,8 @@ cv-classifier-pro/
 - [x] génération de rapport Markdown
 
 ### MVP0 (Version Web)
-- [X] Amélioration de l'interface
-- [ ] Gestion des erreurs avancée
+- [x] Amélioration de l'interface
+- [x] Gestion des erreurs avancée
 - [ ] Prévisualisation des CVs
 - [ ] Export CSV/PDF
 - [x] Historique des analyses
