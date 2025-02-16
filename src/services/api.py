@@ -18,6 +18,7 @@ class AnalysisResponse(BaseModel):
     id: int
     date: datetime
     report: str
+    keywords: Dict[str, float]
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
@@ -51,7 +52,8 @@ async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
         return {
             "id": analysis.id,
             "date": analysis.date,
-            "report": report_content
+            "report": report_content,
+            "keywords": request.keywords
         }
         
     except Exception as e:
@@ -61,7 +63,12 @@ async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
 async def get_analyses(db: Session = Depends(get_db)):
     """Récupère l'historique des analyses"""
     analyses = db.query(Analysis).order_by(Analysis.date.desc()).all()
-    return analyses
+    return [{
+        "id": analysis.id,
+        "date": analysis.date,
+        "report": analysis.report,
+        "keywords": analysis.keywords
+    } for analysis in analyses]
 
 @app.get("/api/analyses/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
@@ -69,4 +76,9 @@ async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
     analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
     if not analysis:
         raise HTTPException(status_code=404, detail="Analyse non trouvée")
-    return analysis
+    return {
+        "id": analysis.id,
+        "date": analysis.date,
+        "report": analysis.report,
+        "keywords": analysis.keywords
+    }
