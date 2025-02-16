@@ -82,3 +82,14 @@ async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
         "report": analysis.report,
         "keywords": analysis.keywords
     }
+
+@app.delete("/api/analyses/{analysis_id}")
+async def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    """Supprime une analyse spécifique"""
+    analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analyse non trouvée")
+    
+    db.delete(analysis)
+    db.commit()
+    return {"message": "Analyse supprimée avec succès"}

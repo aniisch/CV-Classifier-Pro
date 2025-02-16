@@ -12,7 +12,13 @@ import {
   IconButton,
   Collapse,
   Alert,
-  Stack
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button
 } from '@mui/material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -20,12 +26,15 @@ import HistoryIcon from '@mui/icons-material/History';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ErrorIcon from '@mui/icons-material/Error';
 import KeyIcon from '@mui/icons-material/Key';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 const AnalysisHistory = ({ onAnalysisSelect }) => {
   const [analyses, setAnalyses] = useState([]);
   const [selectedAnalysis, setSelectedAnalysis] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [analysisToDelete, setAnalysisToDelete] = useState(null);
 
   const fetchAnalyses = async () => {
     setLoading(true);
@@ -42,12 +51,10 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
     }
   };
 
-  // Charger l'historique des analyses
   useEffect(() => {
     fetchAnalyses();
   }, []);
 
-  // Gérer la sélection d'une analyse
   const handleAnalysisChange = async (event) => {
     const analysisId = event.target.value;
     setSelectedAnalysis(analysisId);
@@ -68,13 +75,44 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
     }
   };
 
-  // Formater la date pour l'affichage
+  const handleDeleteClick = (event, analysis) => {
+    event.stopPropagation();
+    setAnalysisToDelete(analysis);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!analysisToDelete) return;
+
+    try {
+      const response = await fetch(`/api/analyses/${analysisToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur lors de la suppression');
+      }
+
+      setError('');
+      if (selectedAnalysis === analysisToDelete.id) {
+        setSelectedAnalysis('');
+        onAnalysisSelect(null);
+      }
+      await fetchAnalyses();
+    } catch (error) {
+      setError('Erreur lors de la suppression de l\'analyse');
+      console.error('Erreur:', error);
+    } finally {
+      setDeleteDialogOpen(false);
+      setAnalysisToDelete(null);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return format(date, "d MMMM yyyy 'à' HH:mm", { locale: fr });
   };
 
-  // Formater les mots-clés pour l'affichage
   const formatKeywords = (keywords) => {
     if (!keywords) return [];
     return Object.entries(keywords).map(([keyword, weight]) => ({
@@ -167,9 +205,28 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
                 flexDirection: 'column',
                 flex: 1
               }}>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  Analyse du {formatDate(analysis.date)}
-                </Typography>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center'
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    Analyse du {formatDate(analysis.date)}
+                  </Typography>
+                  <Tooltip title="Supprimer cette analyse">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={(e) => handleDeleteClick(e, analysis)}
+                      sx={{ 
+                        opacity: 0.7,
+                        '&:hover': { opacity: 1 }
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
                 <Stack 
                   direction="row" 
                   spacing={1} 
@@ -200,6 +257,30 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
           ))}
         </Select>
       </FormControl>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Êtes-vous sûr de vouloir supprimer cette analyse ? Cette action est irréversible.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+          >
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

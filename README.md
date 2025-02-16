@@ -60,11 +60,15 @@ cv-classifier-pro/
 - [x] génération de rapport Markdown
 
 ### MVP0 (Version Web)
-- [ ] Amélioration de l'interface
+- [X] Amélioration de l'interface
 - [ ] Gestion des erreurs avancée
 - [ ] Prévisualisation des CVs
 - [ ] Export CSV/PDF
-- [X] Historique des analyses
+- [x] Historique des analyses
+- [x] Suppression d'une analyse
+- [ ] Charger des cvs
+- [ ] Charger des cv apartir de WTG
+- [ ] Gestions des analyse par offres d'emploi 
 
 ### Version 1.0 (Desktop)
 - [ ] Conversion Electron
