@@ -63,7 +63,7 @@ cv-classifier-pro/
 - [x] Amélioration de l'interface
 - [x] Gestion des erreurs avancée
 - [ ] Prévisualisation des CVs
-- [ ] Export CSV/PDF
+- [ ] Export le rapport en pdf
 - [x] Historique des analyses
 - [x] Suppression d'une analyse
 - [ ] Charger des cvs

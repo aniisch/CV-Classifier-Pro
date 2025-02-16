@@ -97,14 +97,14 @@ function App() {
 
         <Fade in timeout={800}>
           <Box>
-            {/* Historique des analyses */}
-            <AnalysisHistory onAnalysisSelect={handleHistorySelect} />
-
             {/* Formulaire d'analyse */}
             <CVAnalyzerForm 
               onAnalysisComplete={handleAnalysisComplete}
               onAnalysisStart={handleAnalysisStart}
             />
+
+            {/* Historique des analyses */}
+            <AnalysisHistory onAnalysisSelect={handleHistorySelect} />
 
             {/* Affichage du rapport */}
             {report && (
