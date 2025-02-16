@@ -64,7 +64,7 @@ cv-classifier-pro/
 - [ ] Gestion des erreurs avancée
 - [ ] Prévisualisation des CVs
 - [ ] Export CSV/PDF
-- [ ] Historique des analyses
+- [X] Historique des analyses
 
 ### Version 1.0 (Desktop)
 - [ ] Conversion Electron

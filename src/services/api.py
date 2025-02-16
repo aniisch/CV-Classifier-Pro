@@ -1,6 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, List, Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
+from ..database.database import get_db
+from ..database.models import Analysis
 from .cv_analyzer import CVAnalyzer
 import os
 
@@ -10,24 +14,59 @@ class AnalysisRequest(BaseModel):
     folderPath: str
     keywords: Dict[str, float]
 
-@app.post("/api/analyze")
-async def analyze_cvs(request: AnalysisRequest):
+class AnalysisResponse(BaseModel):
+    id: int
+    date: datetime
+    report: str
+
+@app.post("/api/analyze", response_model=AnalysisResponse)
+async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
     if not os.path.exists(request.folderPath):
         raise HTTPException(status_code=400, detail="Le dossier spécifié n'existe pas")
         
     try:
+        # Analyse des CVs
         analyzer = CVAnalyzer(request.folderPath, request.keywords)
         results = analyzer.analyze_cvs()
         
-        # Générer le rapport
-        report_path = 'rapport_analyse_cv.md'
-        analyzer.generate_markdown_report(results, report_path)
+        # Génération du rapport
+        report_content = analyzer.generate_markdown_report(results)
         
-        # Lire le contenu du rapport
-        with open(report_path, 'r', encoding='utf-8') as f:
-            report_content = f.read()
+        # Sauvegarde dans la base de données
+        analysis = Analysis(
+            folder_path=request.folderPath,
+            keywords=request.keywords,
+            results=[{
+                "filename": cv.filename,
+                "score": cv.score,
+                "found_keywords": cv.found_keywords
+            } for cv in results],
+            report=report_content
+        )
         
-        return {"report": report_content}
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+        
+        return {
+            "id": analysis.id,
+            "date": analysis.date,
+            "report": report_content
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analyses", response_model=List[AnalysisResponse])
+async def get_analyses(db: Session = Depends(get_db)):
+    """Récupère l'historique des analyses"""
+    analyses = db.query(Analysis).order_by(Analysis.date.desc()).all()
+    return analyses
+
+@app.get("/api/analyses/{analysis_id}", response_model=AnalysisResponse)
+async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    """Récupère une analyse spécifique"""
+    analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analyse non trouvée")
+    return analysis

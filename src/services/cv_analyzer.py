@@ -85,11 +85,19 @@ class CVAnalyzer:
             ))
         return sorted(results, key=lambda x: x.score, reverse=True)
 
-    def generate_markdown_report(self, results: List[ScoredCV], output_file: str = "rapport_analyse_cv.md") -> None:
+    def generate_markdown_report(self, results: List[ScoredCV], output_file: str = "rapport_analyse_cv.md") -> str:
         """
         Génère un rapport détaillé au format Markdown avec les résultats de l'analyse
+        
+        Args:
+            results: Liste des CVs analysés et leurs scores
+            output_file: Nom du fichier de sortie (par défaut: rapport_analyse_cv.md)
+            
+        Returns:
+            str: Le contenu du rapport au format Markdown
         """
-        current_date = "15 février 2025"
+        from datetime import datetime
+        current_date = datetime.now().strftime("%d %B %Y à %H:%M")
         
         report = [
             "# 📊 Rapport d'Analyse des CV\n",
@@ -139,5 +147,4 @@ class CVAnalyzer:
             for filename, error in self.failed_conversions:
                 report.append(f"- ❌ `{filename}`: {error}\n")
                 
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(report))
+        return '\n'.join(report)
