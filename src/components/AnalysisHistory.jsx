@@ -1,15 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  MenuItem, 
   Box, 
-  Typography,
   Paper,
-  Chip,
-  Tooltip,
+  Typography,
   IconButton,
+  Tooltip,
   Collapse,
   Alert,
   Stack,
@@ -18,7 +13,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  Button
+  Button,
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -27,6 +27,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ErrorIcon from '@mui/icons-material/Error';
 import KeyIcon from '@mui/icons-material/Key';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ExportButton from './ExportButton';
 
 const AnalysisHistory = ({ onAnalysisSelect }) => {
   const [analyses, setAnalyses] = useState([]);
@@ -40,6 +41,9 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
     setLoading(true);
     try {
       const response = await fetch('/api/analyses');
+      if (!response.ok) {
+        throw new Error('Erreur lors du chargement de l\'historique');
+      }
       const data = await response.json();
       setAnalyses(data);
       setError('');
@@ -72,6 +76,8 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
         setError('Erreur lors du chargement de l\'analyse');
         console.error('Erreur:', error);
       }
+    } else {
+      onAnalysisSelect(null);
     }
   };
 
@@ -108,17 +114,32 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
     }
   };
 
+  const handleExportPDF = async (event, analysis) => {
+    event.stopPropagation();
+    try {
+      const response = await fetch(`/api/export/pdf/${analysis.id}`);
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'export PDF');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rapport_analyse_${analysis.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      setError('Erreur lors de l\'export PDF');
+      console.error('Erreur:', error);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return format(date, "d MMMM yyyy 'à' HH:mm", { locale: fr });
-  };
-
-  const formatKeywords = (keywords) => {
-    if (!keywords) return [];
-    return Object.entries(keywords).map(([keyword, weight]) => ({
-      keyword,
-      weight: Math.round(weight)
-    }));
   };
 
   return (
@@ -175,7 +196,7 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
         </Alert>
       </Collapse>
 
-      <FormControl fullWidth>
+      <FormControl fullWidth sx={{ mb: 2 }}>
         <InputLabel id="analysis-history-label">
           Sélectionner une analyse précédente
         </InputLabel>
@@ -193,66 +214,45 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
             <MenuItem 
               key={analysis.id} 
               value={analysis.id}
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 1,
-                py: 1
-              }}
+              sx={{ display: 'block', py: 1 }}
             >
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                flex: 1
-              }}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center'
-                }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    Analyse du {formatDate(analysis.date)}
-                  </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  Analyse du {formatDate(analysis.date)}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <ExportButton
+                    onClick={(e) => handleExportPDF(e, analysis)}
+                    disabled={loading}
+                  />
                   <Tooltip title="Supprimer cette analyse">
                     <IconButton
                       size="small"
                       color="error"
                       onClick={(e) => handleDeleteClick(e, analysis)}
-                      sx={{ 
-                        opacity: 0.7,
-                        '&:hover': { opacity: 1 }
-                      }}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </Box>
-                <Stack 
-                  direction="row" 
-                  spacing={1} 
-                  sx={{ 
-                    mt: 1,
-                    flexWrap: 'wrap',
-                    gap: '4px'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <KeyIcon fontSize="small" color="action" />
-                    <Typography variant="caption" color="text.secondary">
-                      Mots-clés :
-                    </Typography>
-                  </Box>
-                  {formatKeywords(analysis.keywords).map(({ keyword, weight }, index) => (
-                    <Chip
-                      key={index}
-                      label={`${keyword} (${weight}%)`}
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                    />
-                  ))}
-                </Stack>
               </Box>
+              <Stack 
+                direction="row" 
+                spacing={1} 
+                flexWrap="wrap"
+                sx={{ gap: 0.5 }}
+              >
+                <KeyIcon fontSize="small" sx={{ opacity: 0.7 }} />
+                {Object.entries(analysis.keywords).map(([keyword, weight]) => (
+                  <Chip
+                    key={keyword}
+                    label={`${keyword} (${weight.toFixed(1)}%)`}
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                  />
+                ))}
+              </Stack>
             </MenuItem>
           ))}
         </Select>
@@ -265,7 +265,8 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Êtes-vous sûr de vouloir supprimer cette analyse ? Cette action est irréversible.
+            Êtes-vous sûr de vouloir supprimer cette analyse ?
+            Cette action est irréversible.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
