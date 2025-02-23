@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
@@ -19,6 +19,7 @@ from ..utils.error_handling import (
     FileSystemError
 )
 import os
+import base64
 
 app = FastAPI()
 pdf_service = PDFService()
@@ -32,18 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def format_analysis_response(analysis, include_report=True):
-    """Formate les données d'analyse pour la réponse API"""
-    response = {
-        "id": analysis.id,
-        "date": analysis.date,
-        "keywords": {k: float(v) for k, v in analysis.keywords.items()}
-    }
-    
-    if include_report:
-        response["report"] = analysis.report
-        
-    return response
+class PDFRequest(BaseModel):
+    report: str
 
 class AnalysisRequest(BaseModel):
     folderPath: str
@@ -112,7 +103,12 @@ async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
                 {"error": str(e)}
             )
         
-        return format_analysis_response(analysis)
+        return {
+            "id": analysis.id,
+            "date": analysis.date,
+            "report": report_content,
+            "keywords": request.keywords
+        }
         
     except Exception as e:
         raise handle_application_error(e)
@@ -122,7 +118,12 @@ async def get_analyses(db: Session = Depends(get_db)):
     """Récupère l'historique des analyses"""
     try:
         analyses = db.query(Analysis).order_by(Analysis.date.desc()).all()
-        return [format_analysis_response(analysis, include_report=False) for analysis in analyses]
+        return [{
+            "id": analysis.id,
+            "date": analysis.date,
+            "report": analysis.report,
+            "keywords": {k: float(v) for k, v in analysis.keywords.items()}
+        } for analysis in analyses]
     except SQLAlchemyError as e:
         raise DatabaseError(
             "Erreur lors de la récupération de l'historique",
@@ -139,7 +140,12 @@ async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
                 "Analyse non trouvée",
                 {"analysis_id": analysis_id}
             )
-        return format_analysis_response(analysis)
+        return {
+            "id": analysis.id,
+            "date": analysis.date,
+            "report": analysis.report,
+            "keywords": {k: float(v) for k, v in analysis.keywords.items()}
+        }
     except SQLAlchemyError as e:
         raise DatabaseError(
             "Erreur lors de la récupération de l'analyse",
@@ -167,8 +173,8 @@ async def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
             {"analysis_id": analysis_id, "error": str(e)}
         )
 
-@app.get("/api/export/pdf/{analysis_id}")
-async def export_analysis_to_pdf(analysis_id: int, db: Session = Depends(get_db)):
+@app.post("/api/export/pdf/{analysis_id}")
+async def export_analysis_to_pdf(analysis_id: int, request: PDFRequest, db: Session = Depends(get_db)):
     """Exporte une analyse au format PDF"""
     try:
         analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
@@ -178,18 +184,17 @@ async def export_analysis_to_pdf(analysis_id: int, db: Session = Depends(get_db)
                 {"analysis_id": analysis_id}
             )
             
-        # Préparer les données pour le PDF
-        analysis_data = format_analysis_response(analysis)
+        # Le PDF est maintenant généré côté client
+        # On reçoit juste le contenu à sauvegarder
+        if request.report.startswith('data:application/pdf;base64,'):
+            pdf_data = base64.b64decode(request.report.split(',')[1])
+        else:
+            raise ValidationError("Format de données PDF invalide")
             
-        # Générer le PDF
-        filepath = pdf_service.export_to_pdf(analysis_data, analysis_id)
+        # Sauvegarder le PDF
+        filepath = pdf_service.save_pdf(pdf_data, analysis_id)
         
-        # Renvoyer le fichier
-        return FileResponse(
-            filepath,
-            media_type='application/pdf',
-            filename=os.path.basename(filepath)
-        )
+        return {"message": "PDF sauvegardé avec succès", "filepath": filepath}
         
     except Exception as e:
         raise handle_application_error(e)

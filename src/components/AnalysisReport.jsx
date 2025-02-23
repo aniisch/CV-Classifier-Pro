@@ -1,26 +1,45 @@
 import React from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import { 
+  Paper, 
+  Box,
+  IconButton,
+  Tooltip,
+  Typography
+} from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
-const AnalysisReport = ({ report }) => {
+const AnalysisReport = ({ report, onExportPDF }) => {
+  if (!report) return null;
+
   return (
-    <Paper 
-      elevation={3}
-      sx={{
-        p: 3,
-        transition: 'all 0.3s ease-in-out',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
-        }
-      }}
-    >
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ position: 'relative' }}>
+      <Box 
+        sx={{ 
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          zIndex: 2
+        }}
+      >
+        <Tooltip title="Exporter en PDF">
+          <IconButton
+            onClick={onExportPDF}
+            color="primary"
+            size="large"
+          >
+            <FileDownloadIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
+      
+      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 3, pr: 8 }}>
         📋 Rapport d'Analyse
       </Typography>
 
       <Box 
+        className="report-content"
         sx={{ 
           '& table': {
             borderCollapse: 'collapse',
@@ -102,7 +121,7 @@ const AnalysisReport = ({ report }) => {
           {report}
         </ReactMarkdown>
       </Box>
-    </Paper>
+    </Box>
   );
 };
 

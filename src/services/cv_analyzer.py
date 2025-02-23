@@ -8,6 +8,7 @@ import re
 from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
+from datetime import datetime
 
 @dataclass
 class ScoredCV:
@@ -85,6 +86,12 @@ class CVAnalyzer:
             ))
         return sorted(results, key=lambda x: x.score, reverse=True)
 
+    def calculate_average_score(self, results: List[ScoredCV]) -> float:
+        return sum(cv.score for cv in results) / len(results)
+
+    def calculate_best_score(self, results: List[ScoredCV]) -> float:
+        return max(cv.score for cv in results)
+
     def generate_markdown_report(self, results: List[ScoredCV], output_file: str = "rapport_analyse_cv.md") -> str:
         """
         Génère un rapport détaillé au format Markdown avec les résultats de l'analyse
@@ -96,55 +103,39 @@ class CVAnalyzer:
         Returns:
             str: Le contenu du rapport au format Markdown
         """
-        from datetime import datetime
-        current_date = datetime.now().strftime("%d %B %Y à %H:%M")
+        now = datetime.now()
         
+        # En-tête du rapport
         report = [
-            "# 📊 Rapport d'Analyse des CV\n",
-            f"*Généré le {current_date}*\n",
-            "\n## 📝 Résumé\n",
-            f"- 📁 Nombre total de CV analysés: **{len(results)}**",
-            f"- ⭐ Score moyen: **{sum(cv.score for cv in results) / len(results):.1f}%**",
-            f"- 🏆 Meilleur score: **{max(cv.score for cv in results):.1f}%**\n",
-            "\n## 🎯 Critères d'évaluation\n",
+            f"Rapport d'Analyse des CV",
+            f"*Généré le {now.strftime('%d %B %Y à %H:%M')}*\n",
+            "# Résumé",
+            f"- Nombre total de CV analysés: **{len(results)}**",
+            f"- Score moyen: **{self.calculate_average_score(results):.1f}%**",
+            f"- Meilleur score: **{self.calculate_best_score(results):.1f}%**\n",
+            "# Critères d'évaluation",
             "| Compétence | Pondération |",
-            "|------------|-------------|",
+            "|------------|-------------|"
         ]
         
+        # Ajouter les critères d'évaluation
         for keyword, weight in self.keywords_original.items():
-            report.append(f"| {keyword} | {weight}% |")
-            
-        report.extend(["\n## 🏅 Top 3 des Candidats\n"])
+            report.append(f"| {keyword} | {weight * 100:.1f}% |")
         
-        for i, cv in enumerate(results[:3], 1):
-            emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
-            report.extend([
-                f"### {emoji} {cv.filename} ({cv.score:.1f}%)\n",
-                "| Compétence | Occurrences | Points |",
-                "|------------|-------------|---------|",
-            ])
+        report.append("\n# Top 3 des Candidats")
+        
+        # Trier les résultats par score
+        sorted_results = sorted(results, key=lambda x: x.score, reverse=True)
+        top_3 = sorted_results[:3]
+        
+        for cv in top_3:
+            report.append(f"\n## {cv.filename} ({cv.score:.1f}%)")
+            report.append("| Compétence | Occurrences | Points |")
+            report.append("|------------|-------------|---------|")
+            
             for keyword, count in cv.found_keywords.items():
-                if count > 0:
-                    points = self.keywords_original[keyword]
-                    report.append(f"| {keyword} | {count} | {points}% |")
-            report.append("\n")
-            
-        report.extend([
-            "## 📋 Résultats Détaillés\n",
-            "| Position | Candidat | Score | Compétences Clés |",
-            "|----------|----------|--------|------------------|",
-        ])
+                weight = self.keywords_original.get(keyword, 0)
+                points = count * weight * 100
+                report.append(f"| {keyword} | {count} | {points:.1f}% |")
         
-        for i, cv in enumerate(results, 1):
-            key_skills = ", ".join(f"{k} ({c})" for k, c in cv.found_keywords.items() if c > 0)
-            report.append(f"| {i} | {cv.filename} | {cv.score:.1f}% | {key_skills} |")
-            
-        if self.failed_conversions:
-            report.extend([
-                "\n## ⚠️ Erreurs de Conversion\n",
-                "Les fichiers suivants n'ont pas pu être analysés:\n",
-            ])
-            for filename, error in self.failed_conversions:
-                report.append(f"- ❌ `{filename}`: {error}\n")
-                
-        return '\n'.join(report)
+        return "\n".join(report)
