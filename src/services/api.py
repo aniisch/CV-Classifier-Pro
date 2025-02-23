@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import Dict, List, Optional
@@ -9,7 +8,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from ..database.database import get_db
 from ..database.models import Analysis
 from .cv_analyzer import CVAnalyzer
-from .pdf_service import PDFService
 from ..utils.error_handling import (
     handle_application_error,
     validate_keywords,
@@ -19,10 +17,8 @@ from ..utils.error_handling import (
     FileSystemError
 )
 import os
-import base64
 
 app = FastAPI()
-pdf_service = PDFService()
 
 # Configuration CORS
 app.add_middleware(
@@ -32,9 +28,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class PDFRequest(BaseModel):
-    report: str
 
 class AnalysisRequest(BaseModel):
     folderPath: str
@@ -53,7 +46,7 @@ class AnalysisRequest(BaseModel):
         try:
             validate_folder_path(v)
             return v
-        except FileSystemError as e:
+        except ValidationError as e:
             raise ValueError(e.message)
 
 class AnalysisResponse(BaseModel):
@@ -66,135 +59,84 @@ class AnalysisResponse(BaseModel):
         from_attributes = True
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
+async def global_exception_handler(request: Request, exc: Exception):
     return handle_application_error(exc)
 
-@app.post("/api/analyze", response_model=AnalysisResponse)
+@app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
+    """
+    Analyse les CVs dans le dossier spécifié selon les mots-clés fournis
+    """
     try:
-        # Analyse des CVs
-        analyzer = CVAnalyzer(request.folderPath, request.keywords)
-        results = analyzer.analyze_cvs()
+        # Créer une nouvelle instance de l'analyseur
+        analyzer = CVAnalyzer()
         
-        # Génération du rapport
-        report_content = analyzer.generate_markdown_report(results)
+        # Analyser les CVs
+        report = analyzer.analyze_folder(
+            request.folderPath,
+            request.keywords
+        )
         
-        # Sauvegarde dans la base de données
-        try:
-            analysis = Analysis(
-                folder_path=request.folderPath,
-                keywords=request.keywords,
-                results=[{
-                    "filename": cv.filename,
-                    "score": float(cv.score),
-                    "found_keywords": cv.found_keywords
-                } for cv in results],
-                report=report_content
-            )
-            
-            db.add(analysis)
-            db.commit()
-            db.refresh(analysis)
-            
-        except SQLAlchemyError as e:
-            db.rollback()
-            raise DatabaseError(
-                "Erreur lors de la sauvegarde de l'analyse",
-                {"error": str(e)}
-            )
+        # Créer une nouvelle analyse en base de données
+        analysis = Analysis(
+            date=datetime.now(),
+            report=report,
+            keywords=request.keywords
+        )
         
-        return {
-            "id": analysis.id,
-            "date": analysis.date,
-            "report": report_content,
-            "keywords": request.keywords
-        }
+        # Sauvegarder l'analyse
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
         
+        return analysis
+        
+    except (ValidationError, FileSystemError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Erreur lors de la sauvegarde en base de données")
     except Exception as e:
-        raise handle_application_error(e)
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/analyses", response_model=List[AnalysisResponse])
+@app.get("/analyses", response_model=List[AnalysisResponse])
 async def get_analyses(db: Session = Depends(get_db)):
-    """Récupère l'historique des analyses"""
+    """
+    Récupère l'historique des analyses
+    """
     try:
         analyses = db.query(Analysis).order_by(Analysis.date.desc()).all()
-        return [{
-            "id": analysis.id,
-            "date": analysis.date,
-            "report": analysis.report,
-            "keywords": {k: float(v) for k, v in analysis.keywords.items()}
-        } for analysis in analyses]
+        return analyses
     except SQLAlchemyError as e:
-        raise DatabaseError(
-            "Erreur lors de la récupération de l'historique",
-            {"error": str(e)}
-        )
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des analyses")
 
-@app.get("/api/analyses/{analysis_id}", response_model=AnalysisResponse)
+@app.get("/analyses/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
-    """Récupère une analyse spécifique"""
+    """
+    Récupère une analyse spécifique
+    """
     try:
         analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
         if not analysis:
-            raise ValidationError(
-                "Analyse non trouvée",
-                {"analysis_id": analysis_id}
-            )
-        return {
-            "id": analysis.id,
-            "date": analysis.date,
-            "report": analysis.report,
-            "keywords": {k: float(v) for k, v in analysis.keywords.items()}
-        }
+            raise HTTPException(status_code=404, detail="Analyse non trouvée")
+        return analysis
     except SQLAlchemyError as e:
-        raise DatabaseError(
-            "Erreur lors de la récupération de l'analyse",
-            {"analysis_id": analysis_id, "error": str(e)}
-        )
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération de l'analyse")
 
-@app.delete("/api/analyses/{analysis_id}")
+@app.delete("/analyses/{analysis_id}")
 async def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
-    """Supprime une analyse spécifique"""
+    """
+    Supprime une analyse spécifique
+    """
     try:
         analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
         if not analysis:
-            raise ValidationError(
-                "Analyse non trouvée",
-                {"analysis_id": analysis_id}
-            )
-        
+            raise HTTPException(status_code=404, detail="Analyse non trouvée")
+            
         db.delete(analysis)
         db.commit()
+        
         return {"message": "Analyse supprimée avec succès"}
     except SQLAlchemyError as e:
         db.rollback()
-        raise DatabaseError(
-            "Erreur lors de la suppression de l'analyse",
-            {"analysis_id": analysis_id, "error": str(e)}
-        )
-
-@app.post("/api/export/pdf/{analysis_id}")
-async def export_analysis_to_pdf(analysis_id: int, request: PDFRequest, db: Session = Depends(get_db)):
-    """Exporte une analyse au format PDF"""
-    try:
-        analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
-        if not analysis:
-            raise ValidationError(
-                "Analyse non trouvée",
-                {"analysis_id": analysis_id}
-            )
-            
-        # Le PDF est maintenant généré côté client
-        # On reçoit juste le contenu à sauvegarder
-        if request.report.startswith('data:application/pdf;base64,'):
-            pdf_data = base64.b64decode(request.report.split(',')[1])
-        else:
-            raise ValidationError("Format de données PDF invalide")
-            
-        # Sauvegarder le PDF
-        filepath = pdf_service.save_pdf(pdf_data, analysis_id)
-        
-        return {"message": "PDF sauvegardé avec succès", "filepath": filepath}
-        
-    except Exception as e:
-        raise handle_application_error(e)
+        raise HTTPException(status_code=500, detail="Erreur lors de la suppression de l'analyse")
