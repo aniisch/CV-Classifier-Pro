@@ -1,13 +1,14 @@
-from datetime import datetime
+"""
+Modèles de base de données pour l'application
+"""
 from sqlalchemy import Column, Integer, String, Float, DateTime, JSON
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from datetime import datetime
+from src.database.database import Base
 
 class Analysis(Base):
     """Modèle pour stocker l'historique des analyses"""
     __tablename__ = "analyses"
-
+    
     id = Column(Integer, primary_key=True)
     date = Column(DateTime, default=datetime.now)
     folder_path = Column(String)

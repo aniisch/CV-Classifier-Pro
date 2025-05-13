@@ -144,14 +144,16 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
           </Typography>
 
           <Tooltip title="Rafraîchir l'historique">
-            <IconButton 
-              onClick={fetchAnalyses}
-              disabled={loading}
-              size="small"
-              color="primary"
-            >
-              <RefreshIcon />
-            </IconButton>
+            <span>
+              <IconButton 
+                onClick={fetchAnalyses}
+                disabled={loading}
+                size="small"
+                color="primary"
+              >
+                <RefreshIcon />
+              </IconButton>
+            </span>
           </Tooltip>
         </Box>
 

@@ -113,6 +113,12 @@ const AnalysisReport = ({ report, onExportPDF }) => {
             p: ({ node, ...props }) => (
               <Typography variant="body1" paragraph {...props} />
             ),
+            ul: ({ node, ...props }) => (
+              <ul {...props} />
+            ),
+            ol: ({ node, ...props }) => (
+              <ol {...props} />
+            ),
             li: ({ node, ...props }) => (
               <Typography component="li" variant="body1" {...props} />
             ),

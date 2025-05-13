@@ -176,3 +176,4 @@ cvs/*
 explications.md
 node_modules
 exports/*
+trie-cv/*

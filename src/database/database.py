@@ -1,10 +1,17 @@
+"""
+Configuration de la base de données
+"""
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 from pathlib import Path
+import os
+
+# Obtenir le chemin absolu du répertoire racine du projet
+project_root = Path(__file__).parent.parent.parent
 
 # Création du dossier data s'il n'existe pas
-data_dir = Path(__file__).parent.parent.parent / "data"
+data_dir = project_root / "data"
 data_dir.mkdir(exist_ok=True)
 
 # Création de la base de données SQLite

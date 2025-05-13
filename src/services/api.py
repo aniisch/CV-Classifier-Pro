@@ -5,10 +5,12 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from ..database.database import get_db
-from ..database.models import Analysis
-from .cv_analyzer import CVAnalyzer
-from ..utils.error_handling import (
+
+# Importations absolues au lieu d'importations relatives
+from src.database.database import get_db
+from src.database.models import Analysis
+from src.services.cv_analyzer import CVAnalyzer
+from src.utils.error_handling import (
     handle_application_error,
     validate_keywords,
     validate_folder_path,
@@ -23,7 +25,7 @@ app = FastAPI()
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,8 +54,10 @@ class AnalysisRequest(BaseModel):
 class AnalysisResponse(BaseModel):
     id: int
     date: datetime
-    report: str
+    folder_path: str
     keywords: Dict[str, float]
+    results: Optional[Dict] = None
+    report: str
 
     class Config:
         from_attributes = True
@@ -62,26 +66,28 @@ class AnalysisResponse(BaseModel):
 async def global_exception_handler(request: Request, exc: Exception):
     return handle_application_error(exc)
 
-@app.post("/analyze", response_model=AnalysisResponse)
+@app.post("/api/analyze", response_model=AnalysisResponse)
 async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
     """
     Analyse les CVs dans le dossier spécifié selon les mots-clés fournis
     """
     try:
-        # Créer une nouvelle instance de l'analyseur
-        analyzer = CVAnalyzer()
+        # Créer une nouvelle instance de l'analyseur avec les paramètres requis
+        analyzer = CVAnalyzer(request.folderPath, request.keywords)
         
         # Analyser les CVs
-        report = analyzer.analyze_folder(
-            request.folderPath,
-            request.keywords
-        )
+        results = analyzer.analyze_cvs()
+        
+        # Générer le rapport Markdown
+        report = analyzer.generate_markdown_report(results)
         
         # Créer une nouvelle analyse en base de données
         analysis = Analysis(
             date=datetime.now(),
-            report=report,
-            keywords=request.keywords
+            folder_path=request.folderPath,
+            keywords=request.keywords,
+            results={},  # Champ vide pour l'instant
+            report=report
         )
         
         # Sauvegarder l'analyse
@@ -99,7 +105,7 @@ async def analyze_cvs(request: AnalysisRequest, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/analyses", response_model=List[AnalysisResponse])
+@app.get("/api/analyses", response_model=List[AnalysisResponse])
 async def get_analyses(db: Session = Depends(get_db)):
     """
     Récupère l'historique des analyses
@@ -110,7 +116,7 @@ async def get_analyses(db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des analyses")
 
-@app.get("/analyses/{analysis_id}", response_model=AnalysisResponse)
+@app.get("/api/analyses/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
     """
     Récupère une analyse spécifique
@@ -123,7 +129,7 @@ async def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération de l'analyse")
 
-@app.delete("/analyses/{analysis_id}")
+@app.delete("/api/analyses/{analysis_id}")
 async def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
     """
     Supprime une analyse spécifique
