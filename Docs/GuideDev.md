@@ -1,241 +1,389 @@
-# 🚀 Guide Développeur - CV Classifier Pro
+# Guide Développeur - CV Classifier Pro
 
-## 📚 Table des Matières
+## Table des Matières
 1. [Vue d'ensemble](#vue-densemble)
-2. [Structure détaillée](#structure-détaillée)
-3. [Guide Backend (Python)](#guide-backend-python)
-4. [Guide Frontend (React)](#guide-frontend-react)
-5. [Démarrage du projet](#démarrage-du-projet)
-6. [Guide de débogage](#guide-de-débogage)
-7. [Exemples de code](#exemples-de-code)
+2. [Architecture Phase 1](#architecture-phase-1)
+3. [Roadmap détaillée avec tâches](#roadmap-détaillée-avec-tâches)
+4. [Modèles de données](#modèles-de-données)
+5. [Guide Backend (Python)](#guide-backend-python)
+6. [Guide Frontend (React)](#guide-frontend-react)
+7. [Démarrage du projet](#démarrage-du-projet)
+8. [Phases futures](#phases-futures)
 
 ## Vue d'ensemble
 
-CV Classifier Pro est une application d'analyse de CV qui combine :
-- Backend : Python (FastAPI + PyPDF2)
-- Frontend : React (Material-UI)
+CV Classifier Pro évolue vers une application desktop multi-projets avec deux modes d'analyse:
+
+**Mode Simple** (Phase 1 - Actuel): Analyse par mots-clés pondérés
+**Mode LLM** (Phase 3 - Futur): Comparaison intelligente CV-Offre avec LLM
+
+L'application utilise:
+- Backend: Python (FastAPI + SQLAlchemy)
+- Frontend: React (Material-UI + Vite)
+- Desktop: Electron (multi-plateforme)
+- Database: SQLite (local)
+
+### Architecture globale Phase 1
+
+```
+┌─────────────────────────────────────────────────────┐
+│         ELECTRON APP (Desktop)                      │
+├─────────────────────────────────────────────────────┤
+│  FRONTEND (React)                                   │
+│  ├─ HomeScreen (liste des projets)                 │
+│  ├─ ProjectEditor (édition d'un projet)            │
+│  ├─ CVAnalyzerForm (analyse simple)                │
+│  ├─ AnalysisReport (affichage rapport)             │
+│  └─ AnalysisHistory (historique par projet)        │
+├─────────────────────────────────────────────────────┤
+│  BACKEND (Python FastAPI)                          │
+│  ├─ ProjectManager (CRUD + persistence)            │
+│  ├─ CVAnalyzer (analyse par mots-clés)             │
+│  ├─ FileManager (chargement des CVs)               │
+│  └─ API endpoints                                   │
+├─────────────────────────────────────────────────────┤
+│  DATABASE (SQLite)                                  │
+│  ├─ projects (projets créés)                       │
+│  ├─ analyses (résultats des analyses)              │
+│  └─ settings (configuration utilisateur)           │
+└─────────────────────────────────────────────────────┘
+```
+
+## Architecture Phase 1
 
 ### Flux de données
-```mermaid
-graph LR
-    A[Frontend] -->|POST /api/analyze| B[API FastAPI]
-    B -->|Analyse| C[CVAnalyzer]
-    C -->|Lecture| D[PDFs]
-    C -->|Génération| E[Rapport MD]
-    E -->|Retour| A
-```
-
-## Structure détaillée
 
 ```
-CV-Classifier-Pro/
-├── src/
-│   ├── services/              # Backend Python
-│   │   ├── cv_analyzer.py     # Analyse des CVs
-│   │   └── api.py            # API FastAPI
-│   ├── components/           # Frontend React
-│   │   ├── App.jsx           # Composant racine
-│   │   ├── CVAnalyzerForm    # Formulaire
-│   │   └── AnalysisReport    # Affichage rapport
-│   └── main.jsx             # Point d'entrée React
-├── requirements.txt         # Dépendances Python
-└── package.json            # Dépendances Node.js
+User → HomeScreen
+       ↓
+   Select/Create Project
+       ↓
+   ProjectEditor → Save to DB
+       ↓
+   CVAnalyzerForm (keywords + folder path)
+       ↓
+   POST /api/analyze
+       ↓
+   Backend: CVAnalyzer process
+       ↓
+   Save to DB (analyses table)
+       ↓
+   AnalysisReport (display)
+       ↓
+   AnalysisHistory (persistence)
+```
+
+## Roadmap détaillée avec tâches
+
+### Phase 1 - Mode Simple et Multi-Projet
+
+#### 1.1 - Home Screen et Gestion Projets
+**Objectif**: Écran d'accueil permettant de créer/lister/éditer/supprimer des projets
+
+**Fichiers à créer/modifier:**
+- [ ] `src/components/HomeScreen.jsx` - Nouvel écran d'accueil (À CRÉER)
+- [ ] `src/components/ProjectEditor.jsx` - Édition d'un projet (À CRÉER)
+- [ ] `src/components/App.jsx` - Mettre à jour pour routing HomeScreen → ProjectEditor (À MODIFIER)
+- [ ] `src/database/project_manager.py` - Service gestion projets (À CRÉER)
+- [ ] `src/database/models.py` - Ajouter modèle Project (À MODIFIER)
+
+**Features:**
+- Afficher liste de tous les projets
+- Bouton créer nouveau projet
+- Bouton éditer/supprimer projet
+- Sauvegarder les projets en BD
+
+**Tests manuels:**
+- Créer 3 projets et vérifier persistence après restart
+- Éditer un projet et vérifier changements
+- Supprimer un projet (avec confirmation)
+
+---
+
+#### 1.2 - Refactoriser CVAnalyzerForm
+**Objectif**: Utiliser le projet sélectionné comme contexte
+
+**Fichiers à modifier:**
+- [ ] `src/components/CVAnalyzerForm.jsx` - Utiliser project context (À MODIFIER)
+- [ ] `src/hooks/useProject.js` - Créer hook pour gérer le projet courant (À CRÉER)
+- [ ] `src/database/models.py` - Ajouter champ project_id aux analyses (À MODIFIER)
+
+**Changes:**
+- Les analyses sont liées à un projet spécifique
+- Les mots-clés sont stockés dans le projet, pas dans le formulaire
+- Afficher le nom du projet en haut du formulaire
+
+---
+
+#### 1.3 - Historique des Analyses par Projet
+**Objectif**: Afficher et gérer l'historique des analyses pour le projet courant
+
+**Fichiers à modifier:**
+- [ ] `src/components/AnalysisHistory.jsx` - Filtrer par projet (À MODIFIER)
+- [ ] `src/services/api.py` - Endpoint GET /api/projects/{id}/analyses (À CRÉER)
+
+**Changes:**
+- Lister uniquement les analyses du projet sélectionné
+- Garder fonctionnalités: delete, export, etc.
+
+---
+
+#### 1.4 - Setup Electron
+**Objectif**: Configuration pour build desktop
+
+**Fichiers à créer/modifier:**
+- [ ] `electron/main.js` - Point d'entrée Electron (À CRÉER)
+- [ ] `electron/preload.js` - Bridge Electron (À CRÉER si nécessaire)
+- [ ] `package.json` - Ajouter dépendances Electron et scripts (À MODIFIER)
+- [ ] `vite.config.js` - Configuration Electron (À MODIFIER)
+- [ ] `forge.config.js` - Configuration Electron Forge (À CRÉER)
+
+**Scripts npm à ajouter:**
+- `npm run electron-dev` - Lancer en dev
+- `npm run electron-build` - Build cross-plateforme
+- `npm run make:win` - Build Windows .exe
+- `npm run make:mac` - Build macOS .dmg
+- `npm run make:linux` - Build Linux .AppImage
+
+**Tests:**
+- Build et exécuter sur Windows/Mac/Linux
+
+---
+
+### Phase 2 - Offres d'Emploi
+
+#### 2.1 - Upload et Parser Offre
+**Objectif**: Permettre l'upload d'une offre d'emploi et extraire les requirements
+
+**Fichiers à créer:**
+- [ ] `src/components/JobOfferUpload.jsx` - Interface upload (À CRÉER)
+- [ ] `src/services/job_offer_parser.py` - Parser PDF/TXT (À CRÉER)
+- [ ] `src/database/models.py` - Ajouter modèle JobOffer (À MODIFIER)
+
+**Features:**
+- Upload PDF ou TXT
+- Extraire et afficher les requirements
+- Sauvegarder l'offre en BD
+
+---
+
+### Phase 3 - Mode LLM
+
+#### 3.1 - Configuration LLM
+**Objectif**: Permettre la configuration des LLM
+
+**Fichiers à créer:**
+- [ ] `src/components/LLMSettings.jsx` - Interface configuration (À CRÉER)
+- [ ] `src/services/llm_manager.py` - Gestion LLM (À CRÉER)
+- [ ] `src/utils/llm_adapters/openai_adapter.py` - Adapter OpenAI (À CRÉER)
+- [ ] `src/utils/llm_adapters/anthropic_adapter.py` - Adapter Anthropic (À CRÉER)
+- [ ] `src/utils/llm_adapters/ollama_adapter.py` - Adapter OLLAMA (À CRÉER)
+- [ ] `src/database/models.py` - Ajouter modèle LLMConfig (À MODIFIER)
+
+**Features:**
+- Configuration multi-provider (OpenAI, Anthropic, OLLAMA)
+- Sauvegarde sécurisée des API keys
+- Guide setup OLLAMA dans l'app
+
+---
+
+## Modèles de données
+
+### Schéma SQLite Phase 1
+
+```sql
+-- Projets utilisateur
+CREATE TABLE projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  mode TEXT DEFAULT 'simple',  -- 'simple' ou 'llm'
+  keywords JSON,  -- {"keyword": weight, ...}
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+);
+
+-- Analyses
+CREATE TABLE analyses (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  timestamp TIMESTAMP,
+  mode TEXT,  -- 'simple' ou 'llm'
+  results JSON,  -- [{filename, score, found_keywords, ...}, ...]
+  report TEXT,  -- Markdown content
+  FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+
+-- Offres (Phase 2)
+CREATE TABLE job_offers (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  content TEXT,
+  parsed_requirements JSON,
+  created_at TIMESTAMP,
+  FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+
+-- Configuration LLM (Phase 3)
+CREATE TABLE llm_configs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  provider TEXT,  -- 'openai', 'anthropic', 'ollama'
+  model TEXT,
+  api_key TEXT,  -- Chiffré
+  ollama_url TEXT,
+  created_at TIMESTAMP,
+  FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+```
+
+### Structures Pydantic (API)
+
+```python
+# Phase 1
+class Project(BaseModel):
+    id: str
+    name: str
+    description: str
+    mode: str = "simple"
+    keywords: dict
+    created_at: datetime
+    updated_at: datetime
+
+class Analysis(BaseModel):
+    id: str
+    project_id: str
+    timestamp: datetime
+    mode: str
+    results: list
+    report: str
+
+# Phase 2
+class JobOffer(BaseModel):
+    id: str
+    project_id: str
+    content: str
+    parsed_requirements: list
+
+# Phase 3
+class LLMConfig(BaseModel):
+    id: str
+    project_id: str
+    provider: str
+    model: str
+    ollama_url: str = None
 ```
 
 ## Guide Backend (Python)
 
-### 1. CVAnalyzer (`src/services/cv_analyzer.py`)
+### Structure Backend
 
-```python
-class CVAnalyzer:
-    """
-    Classe principale d'analyse des CVs.
-    
-    Attributs:
-        pdf_folder (Path): Chemin vers le dossier des CVs
-        keywords (dict): Mots-clés et leurs pondérations
-        failed_conversions (list): Liste des erreurs de conversion
-    """
-    
-    def __init__(self, pdf_folder: str, keywords: Dict[str, float]):
-        """
-        Initialise l'analyseur.
-        
-        Args:
-            pdf_folder: Chemin vers le dossier contenant les CVs
-            keywords: Dict de mots-clés avec leurs pondérations
-                     Exemple: {"Python": 30, "JavaScript": 20}
-        
-        Raises:
-            ValueError: Si la somme des pondérations != 100%
-        """
+```
+src/services/
+├── api.py                    # FastAPI app + endpoints
+├── cv_analyzer.py            # Analyse CVs (à garder)
+├── job_offer_parser.py       # Parser offres (Phase 2)
+└── llm_manager.py            # Gestion LLM (Phase 3)
+
+src/database/
+├── database.py               # Config SQLAlchemy + connexion
+├── models.py                 # Modèles ORM
+├── project_manager.py        # CRUD projets
+└── analyses.db               # Fichier SQLite
+
+src/utils/
+├── error_handling.py         # À garder
+└── llm_adapters/             # Adaptateurs LLM (Phase 3)
+    ├── base_adapter.py
+    ├── openai_adapter.py
+    ├── anthropic_adapter.py
+    └── ollama_adapter.py
 ```
 
-#### Méthodes principales
-
-1. `extract_text_from_pdf(self, pdf_path: Path) -> str`:
-   ```python
-   # Utilisation :
-   text = analyzer.extract_text_from_pdf(pdf_path)
-   
-   # Comment ça marche :
-   # 1. Ouvre le PDF avec PyPDF2
-   # 2. Extrait le texte page par page
-   # 3. Nettoie le texte (espaces, retours ligne)
-   # 4. Gère les erreurs de conversion
-   ```
-
-2. `count_keywords(self, text: str) -> Dict[str, int]`:
-   ```python
-   # Utilisation :
-   keyword_counts = analyzer.count_keywords(text)
-   
-   # Retourne :
-   # {
-   #   "Python": 5,    # Trouvé 5 fois
-   #   "JavaScript": 2 # Trouvé 2 fois
-   # }
-   ```
-
-3. `generate_markdown_report(self, results: List[ScoredCV])`:
-   ```python
-   # Génère un rapport structuré :
-   # 1. Résumé avec statistiques
-   # 2. Top 3 des candidats
-   # 3. Tableau détaillé
-   # 4. Section erreurs
-   ```
-
-### 2. API FastAPI (`src/services/api.py`)
+### API Endpoints Phase 1
 
 ```python
-@app.post("/api/analyze")
-async def analyze_cvs(request: AnalysisRequest):
-    """
-    Point d'entrée principal de l'API.
-    
-    Request Body:
-    {
-        "folderPath": "chemin/vers/cvs",
-        "keywords": {
-            "Python": 30,
-            "JavaScript": 20
-        }
-    }
-    
-    Returns:
-    {
-        "report": "contenu_markdown"
-    }
-    """
+# Projets
+GET    /api/projects              # Lister tous les projets
+POST   /api/projects              # Créer un projet
+GET    /api/projects/{id}         # Récupérer un projet
+PUT    /api/projects/{id}         # Mettre à jour un projet
+DELETE /api/projects/{id}         # Supprimer un projet
+
+# Analyses (pour un projet)
+GET    /api/projects/{id}/analyses     # Lister les analyses
+POST   /api/projects/{id}/analyze      # Lancer une analyse
+DELETE /api/analyses/{analysis_id}     # Supprimer une analyse
+
+# Health
+GET    /api/health                # Vérifier la connexion
 ```
 
-#### Gestion des erreurs
+### Exemple endpoint analyse Phase 1
+
 ```python
-try:
-    analyzer = CVAnalyzer(request.folderPath, request.keywords)
-    results = analyzer.analyze_cvs()
-except ValueError as e:
-    raise HTTPException(status_code=400, detail=str(e))
-except Exception as e:
-    raise HTTPException(status_code=500, detail=str(e))
+@app.post("/api/projects/{project_id}/analyze")
+async def analyze_cvs_for_project(project_id: str, request: AnalyzeRequest):
+    """
+    Request body:
+    {
+        "folder_path": "chemin/vers/cvs"
+    }
+
+    Récupère les keywords du projet en BD
+    Lance l'analyse
+    Sauvegarde le résultat
+    """
 ```
 
 ## Guide Frontend (React)
 
-### 1. Composant App (`src/components/App.jsx`)
+### Structure Components Phase 1
 
-```jsx
-function App() {
-  const [report, setReport] = useState(null);
-  
-  // Gestion du rapport
-  const handleAnalysisComplete = (reportData) => {
-    setReport(reportData);
-  };
-  
-  return (
-    <Container>
-      <CVAnalyzerForm onAnalysisComplete={handleAnalysisComplete} />
-      {report && <AnalysisReport report={report} />}
-    </Container>
-  );
-}
+```
+src/components/
+├── App.jsx                      # Router principal
+├── HomeScreen.jsx               # Accueil + liste projets
+├── ProjectEditor.jsx            # Édition d'un projet
+├── CVAnalyzerForm.jsx           # Formulaire analyse (à adapter)
+├── AnalysisReport.jsx           # Affichage rapport
+├── AnalysisHistory.jsx          # Historique (à adapter)
+├── ErrorAlert.jsx               # À garder
+└── ErrorBoundary.jsx            # À garder
 ```
 
-### 2. Formulaire (`src/components/CVAnalyzerForm.jsx`)
+### Hooks Phase 1
 
-```jsx
-function CVAnalyzerForm({ onAnalysisComplete }) {
-  // État local
-  const [folderPath, setFolderPath] = useState('');
-  const [keywords, setKeywords] = useState([
-    { keyword: '', weight: '' }
-  ]);
-  
-  // Validation
-  const validateForm = () => {
-    const totalWeight = keywords.reduce(
-      (sum, k) => sum + Number(k.weight), 
-      0
-    );
-    return totalWeight === 100;
-  };
-  
-  // Soumission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          folderPath,
-          keywords: Object.fromEntries(
-            keywords.map(k => [k.keyword, Number(k.weight)])
-          ),
-        }),
-      });
-      
-      const data = await response.json();
-      onAnalysisComplete(data.report);
-    } catch (error) {
-      console.error('Erreur:', error);
-    }
-  };
-}
+```
+src/hooks/
+├── useError.js                  # À garder
+└── useProject.js                # Nouveau - gestion projet courant
 ```
 
-### 3. Affichage du rapport (`src/components/AnalysisReport.jsx`)
+### State Management
 
-```jsx
-function AnalysisReport({ report }) {
-  return (
-    <Box>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Personnalisation du rendu
-          table: ({ node, ...props }) => (
-            <Table {...props} />
-          ),
-          // etc.
-        }}
-      >
-        {report}
-      </ReactMarkdown>
-    </Box>
-  );
+Utiliser React Context pour:
+- Projet sélectionné courant
+- Liste des projets (pour HomeScreen)
+- Erreurs
+
+```javascript
+// useProject.js example
+function useProject() {
+  const [currentProject, setCurrentProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+
+  const fetchProjects = async () => { /* ... */ };
+  const selectProject = async (id) => { /* ... */ };
+  const createProject = async (data) => { /* ... */ };
+  // etc.
 }
 ```
 
 ## Démarrage du projet
 
-1. Installation des dépendances :
+### 1. Installation initiale
+
 ```bash
 # Backend
 pip install -r requirements.txt
@@ -244,238 +392,43 @@ pip install -r requirements.txt
 npm install
 ```
 
-2. Configuration de l'environnement :
-```bash
-# Créer un dossier pour les CVs
-mkdir cvs
+### 2. Lancement en développement (Phase 1)
 
-# Vérifier les permissions
-chmod 755 cvs  # Linux/Mac
-```
-
-3. Lancement des serveurs :
 ```bash
 # Terminal 1 - Backend
 uvicorn src.services.api:app --reload --port 8000
 
 # Terminal 2 - Frontend
-npm run dev
+npm run start
+
+# Frontend sera accessible sur http://localhost:5173
+# Backend sur http://localhost:8000
 ```
 
-## Guide de débogage
+### 3. Vérification connexion
 
-### Backend
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8000/docs (Swagger)
+- DB: `src/database/analyses.db` (SQLite)
 
-1. Logs FastAPI :
-```python
-# Dans api.py
-import logging
+## Phases futures
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+### Phase 2 - Offres d'Emploi
+1. Créer composant JobOfferUpload
+2. Implémenter parser PDF/TXT
+3. Modifier CVAnalyzerForm pour utiliser l'offre
+4. Ajouter endpoint /api/projects/{id}/analyze-with-offer
 
-@app.post("/api/analyze")
-async def analyze_cvs(request: AnalysisRequest):
-    logger.debug(f"Analyzing CVs in: {request.folderPath}")
-    # ...
-```
+### Phase 3 - Mode LLM
+1. Implémenter adaptateurs LLM
+2. Ajouter configuration sécurisée des API keys
+3. Créer UI pour mode LLM
+4. Guide setup OLLAMA intégré dans l'app
+5. Endpoint /api/projects/{id}/analyze-with-llm
 
-2. Débogage PyPDF2 :
-```python
-# Dans cv_analyzer.py
-def extract_text_from_pdf(self, pdf_path: Path) -> str:
-    try:
-        with open(pdf_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            print(f"PDF Pages: {len(reader.pages)}")
-            # ...
-    except Exception as e:
-        print(f"Error reading {pdf_path}: {e}")
-```
-
-### Frontend
-
-1. Console du navigateur :
-```javascript
-// Dans CVAnalyzerForm.jsx
-console.log('Keywords:', keywords);
-console.log('Form Data:', formData);
-```
-
-2. Débogage des requêtes :
-```javascript
-// Intercepter les requêtes
-fetch('/api/analyze', {
-  // ...
-}).then(response => {
-  console.log('Response:', response);
-  return response.json();
-}).catch(error => {
-  console.error('Error:', error);
-});
-```
-
-## Exemples de code
-
-### 1. Ajout d'un nouveau critère d'analyse
-
-```python
-# Dans cv_analyzer.py
-def analyze_experience(self, text: str) -> int:
-    """Analyse l'expérience professionnelle."""
-    experience_patterns = [
-        r'\d+\s+ans?\s+d\'expérience',
-        r'expérience\s+de\s+\d+\s+ans?'
-    ]
-    
-    for pattern in experience_patterns:
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            # Extraire le nombre d'années
-            years = int(re.search(r'\d+', match.group()).group())
-            return years
-    return 0
-
-# Utilisation dans analyze_cvs
-def analyze_cvs(self):
-    results = []
-    for pdf_file in self.pdf_folder.glob('*.pdf'):
-        text = self.extract_text_from_pdf(pdf_file)
-        keyword_counts = self.count_keywords(text)
-        experience_years = self.analyze_experience(text)
-        
-        # Ajuster le score selon l'expérience
-        base_score = self.calculate_score(keyword_counts)
-        experience_bonus = min(experience_years * 2, 20)  # Max 20%
-        final_score = base_score + experience_bonus
-        
-        results.append(ScoredCV(
-            filename=pdf_file.name,
-            score=final_score,
-            found_keywords=keyword_counts,
-            experience_years=experience_years
-        ))
-    return sorted(results, key=lambda x: x.score, reverse=True)
-```
-
-### 2. Personnalisation du rapport
-
-```python
-def generate_markdown_report(self, results: List[ScoredCV]) -> str:
-    """
-    Génère un rapport personnalisé avec graphiques ASCII.
-    """
-    report = [
-        "# 📊 Analyse des CV\n",
-        self._generate_summary(results),
-        self._generate_charts(results),
-        self._generate_detailed_results(results)
-    ]
-    return "\n".join(report)
-
-def _generate_charts(self, results: List[ScoredCV]) -> str:
-    """
-    Génère des graphiques ASCII pour visualiser les scores.
-    """
-    chart = ["## 📈 Distribution des scores\n```"]
-    max_score = max(cv.score for cv in results)
-    for cv in results:
-        bar_length = int((cv.score / max_score) * 20)
-        chart.append(f"{cv.filename[:20]:<20} {'█' * bar_length} {cv.score}%")
-    chart.append("```\n")
-    return "\n".join(chart)
-```
-
-### 3. Ajout d'une fonctionnalité de prévisualisation
-
-```jsx
-// Dans CVAnalyzerForm.jsx
-function CVPreview({ file }) {
-  const [preview, setPreview] = useState('');
-  
-  useEffect(() => {
-    if (!file) return;
-    
-    // Appel à l'API pour prévisualiser
-    fetch('/api/preview', {
-      method: 'POST',
-      body: JSON.stringify({ path: file })
-    })
-    .then(response => response.json())
-    .then(data => setPreview(data.preview));
-  }, [file]);
-  
-  return (
-    <Paper elevation={3} sx={{ p: 2, mt: 2 }}>
-      <Typography variant="h6">
-        Prévisualisation
-      </Typography>
-      <pre>{preview}</pre>
-    </Paper>
-  );
-}
-```
-
-## Bonnes pratiques
-
-1. **Backend** :
-   - Validez toujours les entrées utilisateur
-   - Gérez proprement les erreurs
-   - Utilisez des types avec Pydantic
-   - Documentez vos fonctions
-
-2. **Frontend** :
-   - Utilisez des composants réutilisables
-   - Gérez les états avec useState/useEffect
-   - Validez les formulaires
-   - Ajoutez des retours utilisateur
-
-3. **Général** :
-   - Suivez un style de code cohérent
-   - Commentez le code complexe
-   - Testez les cas limites
-   - Gardez les logs pertinents
-
-## Ressources utiles
-
-1. **Documentation** :
-   - [FastAPI](https://fastapi.tiangolo.com/)
-   - [PyPDF2](https://pypdf2.readthedocs.io/)
-   - [React](https://reactjs.org/)
-   - [Material-UI](https://mui.com/)
-
-2. **Outils** :
-   - VS Code avec extensions Python et React
-   - Postman pour tester l'API
-   - React Developer Tools
-   - Python Debugger (pdb)
-
-## FAQ Développement
-
-1. **Q**: Comment ajouter un nouveau format de CV ?
-   **R**: Créez une nouvelle méthode d'extraction dans CVAnalyzer :
-   ```python
-   def extract_text_from_docx(self, path: Path) -> str:
-       # Utiliser python-docx
-       pass
-   ```
-
-2. **Q**: Comment améliorer l'analyse des mots-clés ?
-   **R**: Utilisez des techniques NLP :
-   ```python
-   from nltk.tokenize import word_tokenize
-   from nltk.stem import WordNetLemmatizer
-   
-   def preprocess_text(self, text: str) -> str:
-       tokens = word_tokenize(text.lower())
-       lemmatizer = WordNetLemmatizer()
-       return " ".join(lemmatizer.lemmatize(token) for token in tokens)
-   ```
-
-3. **Q**: Comment gérer les gros fichiers PDF ?
-   **R**: Utilisez le streaming et le traitement asynchrone :
-   ```python
-   async def process_large_pdf(self, path: Path):
-       # Traitement par morceaux
-       pass
-   ```
+### Optimisations
+1. Queue/Worker pour gros batches
+2. Caching et indexing
+3. Tests unitaires
+4. Logging structuré
+5. CI/CD pipeline

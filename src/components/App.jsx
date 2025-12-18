@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
-import { 
-  Container, 
-  Typography, 
-  Box, 
-  Alert, 
+import {
+  Container,
+  Typography,
+  Box,
+  Alert,
   Paper,
   Fade,
   Grow,
   LinearProgress
 } from '@mui/material';
 import html2pdf from 'html2pdf.js';
+import HomeScreen from './HomeScreen';
+import ProjectEditor from './ProjectEditor';
 import CVAnalyzerForm from './CVAnalyzerForm';
 import AnalysisReport from './AnalysisReport';
 import AnalysisHistory from './AnalysisHistory';
 
 function App() {
+  const [screen, setScreen] = useState('home'); // 'home', 'editor', 'analyzer'
+  const [currentProject, setCurrentProject] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -81,93 +85,102 @@ function App() {
     }
   };
 
+  const handleProjectSelect = (project) => {
+    setCurrentProject(project);
+    setScreen('editor');
+  };
+
+  const handleBackToHome = () => {
+    setScreen('home');
+    setCurrentProject(null);
+    setReport(null);
+  };
+
+  const handleProjectSave = (project) => {
+    setCurrentProject(project);
+    // Rester sur l'écran editor après save
+  };
+
   return (
-    <Box sx={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)',
-      py: 4 
-    }}>
-      <Container maxWidth="lg">
-        <Fade in timeout={1000}>
-          <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography 
-              variant="h4" 
-              component="h1" 
-              gutterBottom
-              sx={{
-                fontWeight: 'bold',
-                textShadow: '2px 2px 4px rgba(0,0,0,0.1)',
-                mb: 2
-              }}
-            >
-              📊 CV Classifier Pro
-            </Typography>
-            <Typography 
-              variant="subtitle1" 
-              color="text.secondary"
-              sx={{ mb: 4 }}
-            >
-              Analysez vos CV en quelques clics
-            </Typography>
-          </Box>
-        </Fade>
+    <>
+      {screen === 'home' && (
+        <HomeScreen onProjectSelect={handleProjectSelect} />
+      )}
 
-        {error && (
-          <Grow in timeout={500}>
-            <Alert 
-              severity="error" 
-              sx={{ 
-                mb: 2,
-                borderRadius: 2,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}
-            >
-              {error}
-            </Alert>
-          </Grow>
-        )}
-
-        {loading && (
-          <Box sx={{ width: '100%', mb: 2 }}>
-            <LinearProgress />
-          </Box>
-        )}
-
-        <Fade in timeout={800}>
-          <Box>
-            {/* Formulaire d'analyse */}
-            <CVAnalyzerForm 
-              onAnalysisComplete={handleAnalysisComplete}
-              onAnalysisStart={handleAnalysisStart}
+      {screen === 'editor' && currentProject && (
+        <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
+          <Container maxWidth="lg">
+            <ProjectEditor
+              project={currentProject}
+              onBack={handleBackToHome}
+              onSave={handleProjectSave}
             />
 
-            {/* Historique des analyses */}
-            <AnalysisHistory onAnalysisSelect={handleHistorySelect} />
-
-            {/* Affichage du rapport */}
-            {report && (
-              <Grow in timeout={500}>
-                <Box sx={{ mt: 4 }}>
-                  <Paper 
-                    elevation={3} 
-                    sx={{ 
-                      p: 3,
-                      borderRadius: 3,
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+            {/* Afficher le formulaire d'analyse sous le ProjectEditor */}
+            <Box sx={{ mt: 4 }}>
+              {error && (
+                <Grow in timeout={500}>
+                  <Alert
+                    severity="error"
+                    sx={{
+                      mb: 2,
+                      borderRadius: 2,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                     }}
                   >
-                    <AnalysisReport 
-                      report={report} 
-                      onExportPDF={handleExportPDF}
-                    />
-                  </Paper>
+                    {error}
+                  </Alert>
+                </Grow>
+              )}
+
+              {loading && (
+                <Box sx={{ width: '100%', mb: 2 }}>
+                  <LinearProgress />
                 </Box>
-              </Grow>
-            )}
-          </Box>
-        </Fade>
-      </Container>
-    </Box>
+              )}
+
+              <Fade in timeout={800}>
+                <Box>
+                  {/* Formulaire d'analyse */}
+                  <CVAnalyzerForm
+                    project={currentProject}
+                    onAnalysisComplete={handleAnalysisComplete}
+                    onAnalysisStart={handleAnalysisStart}
+                  />
+
+                  {/* Historique des analyses */}
+                  <AnalysisHistory
+                    projectId={currentProject.id}
+                    onAnalysisSelect={handleHistorySelect}
+                  />
+
+                  {/* Affichage du rapport */}
+                  {report && (
+                    <Grow in timeout={500}>
+                      <Box sx={{ mt: 4 }}>
+                        <Paper
+                          elevation={3}
+                          sx={{
+                            p: 3,
+                            borderRadius: 3,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}
+                        >
+                          <AnalysisReport
+                            report={report}
+                            onExportPDF={handleExportPDF}
+                          />
+                        </Paper>
+                      </Box>
+                    </Grow>
+                  )}
+                </Box>
+              </Fade>
+            </Box>
+          </Container>
+        </Box>
+      )}
+    </>
   );
 }
 

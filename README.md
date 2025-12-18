@@ -1,38 +1,55 @@
 # CV Classifier Pro
 
-Application de classification automatique de CV basée sur des mots-clés et l'analyse LLM.
+Application desktop multi-projets pour l'analyse et la classification de CV. Deux modes disponibles : mode simple avec analyse par mots-clés pondérés, et mode LLM pour comparaison intelligente avec les offres d'emploi.
 
 ## 🚀 Fonctionnalités
 
-- Import multiple de CV (PDF)
-- Configuration de mots-clés avec système de pondération
-- Analyse de texte et classification automatique
-- Génération de rapports détaillés
-- Base de données locale pour historique
-- Mode hors-ligne disponible
-- Interface utilisateur intuitive
-- Export des résultats en CSV
+### Phase 1 - Mode Simple (Actif)
+- Gestion multi-projets : créez et gérez plusieurs projets d'analyse indépendants
+- Analyse par mots-clés avec système de pondération (total = 100%)
+- Scoring pondéré basé sur les mots-clés trouvés dans les CVs
+- Rapports détaillés en Markdown avec statistiques
+- Base de données locale SQLite pour l'historique persistant
+- Interface intuitive avec Material-UI
+- Mode hors-ligne complet
+- Application desktop (Electron) multi-plateforme
+
+### Phase 2 - Gestion des Offres d'Emploi (Prochain)
+- Upload d'offres d'emploi (PDF/TXT)
+- Parsing automatique pour extraire les requirements
+- Analyse basée sur l'offre avec matching de mots-clés
+
+### Phase 3 - Mode LLM (Futur)
+- Support multi-provider LLM : OpenAI, Anthropic, OLLAMA
+- Exécution locale avec OLLAMA pour la sécurité
+- Analyse intelligente de compatibilité CV-Offre
+- Reasoning et suggestions contextuelles
 
 ## 📋 Prérequis
 
 - Node.js >= 18
-- Electron.js pour la version desktop
-- Base de données locale (SQLite)
+- Python 3.8+
+- SQLite (local)
 
-## 🔧 Installation
+## 🔧 Installation et Développement
 
 ```bash
 # Clone du repository
 git clone https://github.com/aniisch/CV-Classifier-Pro.git
+cd CV-Classifier-Pro
 
 # Installation des dépendances
 npm install
+pip install -r requirements.txt
 
-# Lancement en mode développement web
-npm run dev
+# Développement en mode web
+npm run start              # Frontend (localhost:5173)
+cd src/database
+python init_db.py # (la premiére fois) a automatiser après
+uvicorn src.services.api:app --reload --port 8000  # Backend
 
-# Build version desktop
-npm run build:electron
+# Build desktop
+npm run build
 ```
 
 ## 🗂️ Structure du Projet
@@ -41,57 +58,62 @@ npm run build:electron
 cv-classifier-pro/
 ├── src/
 │   ├── components/         # Composants React
-│   ├── services/          # Services métier
-│   ├── utils/             # Utilitaires
-│   ├── database/         # Configuration DB
-│   └── assets/           # Resources statiques
-├── electron/             # Configuration Electron
-├── scripts/             # Scripts utilitaires
-└── tests/              # Tests unitaires
+│   │   ├── HomeScreen.jsx       # Accueil et gestion projets (Phase 1)
+│   │   ├── ProjectEditor.jsx    # Édition d'un projet (Phase 1)
+│   │   ├── CVAnalyzerForm.jsx   # Formulaire analyse mode simple (Phase 1)
+│   │   ├── AnalysisReport.jsx   # Affichage rapport (Phase 1)
+│   │   ├── AnalysisHistory.jsx  # Historique analyses (Phase 1)
+│   │   ├── JobOfferUpload.jsx   # Upload offre (Phase 2)
+│   │   └── LLMSettings.jsx      # Configuration LLM (Phase 3)
+│   ├── services/
+│   │   ├── api.py              # FastAPI
+│   │   ├── cv_analyzer.py      # Logique analyse mode simple
+│   │   ├── job_offer_parser.py # Parser offres (Phase 2)
+│   │   └── llm_manager.py      # Gestion LLMs (Phase 3)
+│   ├── database/
+│   │   ├── models.py           # Modèles SQLAlchemy
+│   │   ├── database.py         # Configuration DB
+│   │   └── project_manager.py  # Gestion projets (Phase 1)
+│   ├── utils/
+│   │   ├── error_handling.py
+│   │   └── llm_adapters/       # Adaptateurs LLM (Phase 3)
+│   ├── theme/
+│   │   └── theme.js
+│   ├── hooks/
+│   │   └── useProject.js       # Hook gestion projet (Phase 1)
+│   └── main.jsx
+├── electron/                   # Configuration Electron (Phase 1)
+├── requirements.txt
+├── package.json
+├── vite.config.js
+└── index.html
 ```
 
-## 🛣️ Roadmap
+## 🛣️ Roadmap Détaillée
 
-### MVP0.0 (Version Web)
-- [x] back python
-- [x] lien vers un dossier
-- [x] analyse très basique
-- [x] interface de base avec React et Material-UI
-- [x] génération de rapport Markdown
+### Phase 1 - Mode Simple et Multi-Projet
+- [ ] Home screen avec liste des projets
+- [ ] CRUD des projets (create, read, update, delete)
+- [ ] Persistance des projets en SQLite
+- [ ] Refactorisation CVAnalyzerForm pour utiliser le projet sélectionné
+- [ ] Export historique des analyses par projet
+- [ ] Setup Electron pour build desktop
+- [ ] Build et packaging cross-plateforme
 
-### MVP0 (Version Web)
-- [x] Amélioration de l'interface
-- [x] Gestion des erreurs avancée
-- [ ] Prévisualisation des CVs
-- [x] Export le rapport en pdf
-- [x] Historique des analyses
-- [x] Suppression d'une analyse
-- [ ] Gestions des analyse par offres d'emploi 
-- [ ] Charger des cvs
-- [ ] Charger des cv apartir de WTG
+### Phase 2 - Offres d'Emploi
+- [ ] Composant upload d'offre
+- [ ] Parser offre (extraction requirements)
+- [ ] Modèle database pour job_offers
+- [ ] Analyse simple mode basée sur offre
+- [ ] Affichage comparatif CV vs offre
 
-
-### Version 1.0 (Desktop)
-- [ ] Conversion Electron
-- [ ] Base de données locale
-- [ ] Gestion hors-ligne
-- [ ] Interface améliorée
-
-### Version 2.0 (Intelligence)
-- [ ] Intégration LLM
-- [ ] Analyse d'offres d'emploi
-- [ ] Matching CV-Offre
-- [ ] Suggestions intelligentes
-
-## 📝 TODO
-
-- [ ] Ajouter la création du CSV
-- [ ] Configurer le bouton "objet précédent"
-- [ ] Afficher les images d'objets cibles
-- [ ] Implémenter la lecture des fichiers JSON
-- [ ] Formatter les données après inférence
-- [ ] Créer les bases de données par ligne
-- [ ] Gérer le choix du dossier
+### Phase 3 - Mode LLM
+- [ ] Adaptateurs LLM (OpenAI, Anthropic, OLLAMA)
+- [ ] Configuration et sauvegarde API keys
+- [ ] Guide setup OLLAMA dans l'app
+- [ ] LLMAnalyzer service
+- [ ] UI pour mode LLM
+- [ ] Gestion queue/worker (optim fin)
 
 ## 📦 Branches
 
