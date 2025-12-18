@@ -7,8 +7,10 @@ import {
   Paper,
   Fade,
   Grow,
-  LinearProgress
+  LinearProgress,
+  Button
 } from '@mui/material';
+import { ArrowBack as BackIcon } from '@mui/icons-material';
 import html2pdf from 'html2pdf.js';
 import HomeScreen from './HomeScreen';
 import ProjectEditor from './ProjectEditor';
@@ -17,14 +19,13 @@ import AnalysisReport from './AnalysisReport';
 import AnalysisHistory from './AnalysisHistory';
 
 function App() {
-  const [screen, setScreen] = useState('home'); // 'home', 'editor', 'analyzer'
+  const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor'
   const [currentProject, setCurrentProject] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
 
-  // Gérer la réception d'un nouveau rapport d'analyse
   const handleAnalysisComplete = (data) => {
     setLoading(false);
     if (data && data.report) {
@@ -35,7 +36,6 @@ function App() {
     }
   };
 
-  // Gérer la sélection d'une analyse depuis l'historique
   const handleHistorySelect = (reportContent, analysisId) => {
     if (reportContent) {
       setReport(reportContent);
@@ -44,31 +44,28 @@ function App() {
     }
   };
 
-  // Gérer le début d'une analyse
   const handleAnalysisStart = () => {
     setLoading(true);
     setError(null);
   };
 
-  // Gérer l'export PDF
   const handleExportPDF = async () => {
     if (!report) return;
-    
+
     try {
       const element = document.querySelector('.report-content');
       if (!element) {
         throw new Error('Élément rapport non trouvé');
       }
 
-      // Générer le nom du fichier avec la date et l'heure actuelles
       const now = new Date();
       const dateStr = now.toISOString()
-        .replace(/[-:]/g, '')  // Enlever les tirets et les deux points
-        .split('T')[0];        // Garder seulement la date
+        .replace(/[-:]/g, '')
+        .split('T')[0];
       const timeStr = now.toISOString()
-        .split('T')[1]         // Prendre la partie heure
-        .split('.')[0]         // Enlever les millisecondes
-        .replace(/:/g, '');    // Enlever les deux points
+        .split('T')[1]
+        .split('.')[0]
+        .replace(/:/g, '');
 
       const opt = {
         margin: 1,
@@ -87,6 +84,12 @@ function App() {
 
   const handleProjectSelect = (project) => {
     setCurrentProject(project);
+    setScreen('analyzer');
+    setReport(null);
+  };
+
+  const handleEditProject = (project) => {
+    setCurrentProject(project);
     setScreen('editor');
   };
 
@@ -96,9 +99,13 @@ function App() {
     setReport(null);
   };
 
+  const handleBackToAnalyzer = () => {
+    setScreen('analyzer');
+  };
+
   const handleProjectSave = (project) => {
     setCurrentProject(project);
-    // Rester sur l'écran editor après save
+    setScreen('analyzer');
   };
 
   return (
@@ -107,76 +114,69 @@ function App() {
         <HomeScreen onProjectSelect={handleProjectSelect} />
       )}
 
+      {screen === 'analyzer' && currentProject && (
+        <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
+          <Container maxWidth="lg">
+            {/* Header avec bouton éditer */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+              <Box>
+                <Button startIcon={<BackIcon />} onClick={handleBackToHome} sx={{ mb: 2 }}>
+                  Retour à l'accueil
+                </Button>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {currentProject.name}
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                onClick={() => handleEditProject(currentProject)}
+              >
+                Éditer le projet
+              </Button>
+            </Box>
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+
+            {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+            {/* Formulaire d'analyse */}
+            <CVAnalyzerForm
+              project={currentProject}
+              onAnalysisComplete={handleAnalysisComplete}
+              onAnalysisStart={handleAnalysisStart}
+            />
+
+            {/* Historique des analyses */}
+            <AnalysisHistory
+              projectId={currentProject.id}
+              onAnalysisSelect={handleHistorySelect}
+            />
+
+            {/* Affichage du rapport */}
+            {report && (
+              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+                <AnalysisReport
+                  report={report}
+                  onExportPDF={handleExportPDF}
+                />
+              </Paper>
+            )}
+          </Container>
+        </Box>
+      )}
+
       {screen === 'editor' && currentProject && (
         <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
           <Container maxWidth="lg">
             <ProjectEditor
               project={currentProject}
-              onBack={handleBackToHome}
+              onBack={handleBackToAnalyzer}
               onSave={handleProjectSave}
             />
-
-            {/* Afficher le formulaire d'analyse sous le ProjectEditor */}
-            <Box sx={{ mt: 4 }}>
-              {error && (
-                <Grow in timeout={500}>
-                  <Alert
-                    severity="error"
-                    sx={{
-                      mb: 2,
-                      borderRadius: 2,
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                    }}
-                  >
-                    {error}
-                  </Alert>
-                </Grow>
-              )}
-
-              {loading && (
-                <Box sx={{ width: '100%', mb: 2 }}>
-                  <LinearProgress />
-                </Box>
-              )}
-
-              <Fade in timeout={800}>
-                <Box>
-                  {/* Formulaire d'analyse */}
-                  <CVAnalyzerForm
-                    project={currentProject}
-                    onAnalysisComplete={handleAnalysisComplete}
-                    onAnalysisStart={handleAnalysisStart}
-                  />
-
-                  {/* Historique des analyses */}
-                  <AnalysisHistory
-                    projectId={currentProject.id}
-                    onAnalysisSelect={handleHistorySelect}
-                  />
-
-                  {/* Affichage du rapport */}
-                  {report && (
-                    <Grow in timeout={500}>
-                      <Box sx={{ mt: 4 }}>
-                        <Paper
-                          elevation={3}
-                          sx={{
-                            p: 3,
-                            borderRadius: 3,
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          <AnalysisReport
-                            report={report}
-                            onExportPDF={handleExportPDF}
-                          />
-                        </Paper>
-                      </Box>
-                    </Grow>
-                  )}
-                </Box>
-              </Fade>
-            </Box>
           </Container>
         </Box>
       )}

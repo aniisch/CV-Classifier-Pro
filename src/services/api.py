@@ -153,6 +153,54 @@ async def delete_project(project_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/projects/{project_id}/analyze")
+async def analyze_project(project_id: str, request: dict, db: Session = Depends(get_db)):
+    """Analyse les CVs pour un projet spécifique"""
+    try:
+        # Récupérer le projet
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouvé")
+
+        # Extraire folder_path et keywords du projet
+        folder_path = request.get('folder_path')
+        keywords = project.keywords
+
+        if not folder_path:
+            raise HTTPException(status_code=400, detail="folder_path requis")
+
+        if not keywords:
+            raise HTTPException(status_code=400, detail="Mots-clés du projet manquants")
+
+        # Convertir les keywords en floats (au cas où ils seraient des strings/ints depuis la DB)
+        keywords = {k: float(v) for k, v in keywords.items()}
+
+        # Lancer l'analyse avec CVAnalyzer
+        analyzer = CVAnalyzer(folder_path, keywords)
+        results = analyzer.analyze_cvs()
+        report = analyzer.generate_markdown_report(results)
+
+        # Sauvegarder l'analyse en DB
+        analysis = Analysis(
+            project_id=project_id,
+            date=datetime.now(),
+            report=report,
+            keywords=keywords,
+            folder_path=folder_path
+        )
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+
+        return {"report": report}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in analyze_project: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/health")
 async def health_check():
     """Vérification de la connexion"""

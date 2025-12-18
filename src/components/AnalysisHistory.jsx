@@ -26,27 +26,31 @@ import ErrorIcon from '@mui/icons-material/Error';
 import KeyIcon from '@mui/icons-material/Key';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-const AnalysisHistory = ({ onAnalysisSelect }) => {
+const AnalysisHistory = ({ projectId, onAnalysisSelect }) => {
   const [analyses, setAnalyses] = useState([]);
   const [selectedAnalysis, setSelectedAnalysis] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [analysisToDelete, setAnalysisToDelete] = useState(null);
 
   const fetchAnalyses = async () => {
+    if (!projectId) return;
+
     setLoading(true);
     try {
-      const response = await fetch('/api/analyses');
+      const response = await fetch(`/api/projects/${projectId}/analyses`);
       if (!response.ok) {
-        throw new Error('Erreur lors de la récupération de l\'historique');
+        // Phase 1.3 n'est pas encore implémenté, on ignore silencieusement
+        setAnalyses([]);
+        return;
       }
       const data = await response.json();
-      setAnalyses(data);
+      setAnalyses(data || []);
       setError('');
     } catch (error) {
-      setError('Erreur lors de la récupération de l\'historique');
-      console.error('Erreur:', error);
+      // Phase 1.3 pas encore implémenté
+      setAnalyses([]);
     } finally {
       setLoading(false);
     }
@@ -54,7 +58,7 @@ const AnalysisHistory = ({ onAnalysisSelect }) => {
 
   useEffect(() => {
     fetchAnalyses();
-  }, []);
+  }, [projectId]);
 
   const formatDate = (dateString) => {
     const options = { 
