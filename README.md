@@ -2,17 +2,18 @@
 
 Application desktop multi-projets pour l'analyse et la classification de CV. Deux modes disponibles : mode simple avec analyse par mots-clés pondérés, et mode LLM pour comparaison intelligente avec les offres d'emploi.
 
-## 🚀 Fonctionnalités
+## Fonctionnalités
 
-### Phase 1 - Mode Simple (Actif)
+### Phase 1 - Mode Simple (Terminé)
 - Gestion multi-projets : créez et gérez plusieurs projets d'analyse indépendants
 - Analyse par mots-clés avec système de pondération (total = 100%)
 - Scoring pondéré basé sur les mots-clés trouvés dans les CVs
 - Rapports détaillés en Markdown avec statistiques
+- Export PDF des rapports
 - Base de données locale SQLite pour l'historique persistant
 - Interface intuitive avec Material-UI
 - Mode hors-ligne complet
-- Application desktop (Electron) multi-plateforme
+- Application desktop Electron avec sélection native de dossiers
 
 ### Phase 2 - Gestion des Offres d'Emploi (Prochain)
 - Upload d'offres d'emploi (PDF/TXT)
@@ -25,112 +26,155 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Deu
 - Analyse intelligente de compatibilité CV-Offre
 - Reasoning et suggestions contextuelles
 
-## 📋 Prérequis
+## Prérequis
 
-- Node.js >= 18
+- Node.js >= 18 (recommandé: 20.x ou 22.x)
 - Python 3.8+
-- SQLite (local)
+- pip (gestionnaire de paquets Python)
 
-## 🔧 Installation et Développement
+## Installation
 
 ```bash
 # Clone du repository
 git clone https://github.com/aniisch/CV-Classifier-Pro.git
 cd CV-Classifier-Pro
 
-# Installation des dépendances
+# Installation des dépendances Node.js
 npm install
+
+# Installation des dépendances Python
 pip install -r requirements.txt
 
-# Développement en mode web
-npm run start              # Frontend (localhost:5173)
+# Initialisation de la base de données (première fois uniquement)
 cd src/database
-python init_db.py # (la premiére fois) a automatiser après
-uvicorn src.services.api:app --reload --port 8000  # Backend
-
-# Build desktop
-npm run build
+python init_db.py
+cd ../..
 ```
 
-## 🗂️ Structure du Projet
+## Développement
+
+### Mode Web (navigateur)
+
+```bash
+# Terminal 1 - Backend Python
+uvicorn src.services.api:app --reload --port 8000
+
+# Terminal 2 - Frontend Vite
+npm run start
+```
+
+Ouvrir http://localhost:5173 dans le navigateur.
+
+### Mode Desktop (Electron)
+
+```bash
+# Lance tout automatiquement (backend + frontend + Electron)
+npm run electron-dev
+```
+
+## Build Production
+
+### Étape 1 : Créer l'exécutable backend avec PyInstaller
+
+```bash
+# Installer PyInstaller
+pip install pyinstaller
+
+# Créer l'exe du backend
+pyinstaller --onefile --name backend src/services/api.py
+# L'exe sera dans dist/backend.exe
+
+# Copier dans le dossier electron
+mkdir -p electron/backend
+cp dist/backend.exe electron/backend/
+```
+
+### Étape 2 : Build l'application Electron
+
+```bash
+# Build pour Windows (.exe)
+npm run make:win
+
+# Build pour macOS (.dmg)
+npm run make:mac
+
+# Build pour Linux (.deb, .rpm)
+npm run make:linux
+```
+
+Les fichiers de distribution seront dans `out/make/`.
+
+## Structure du Projet
 
 ```
 cv-classifier-pro/
 ├── src/
 │   ├── components/         # Composants React
-│   │   ├── HomeScreen.jsx       # Accueil et gestion projets (Phase 1)
-│   │   ├── ProjectEditor.jsx    # Édition d'un projet (Phase 1)
-│   │   ├── CVAnalyzerForm.jsx   # Formulaire analyse mode simple (Phase 1)
-│   │   ├── AnalysisReport.jsx   # Affichage rapport (Phase 1)
-│   │   ├── AnalysisHistory.jsx  # Historique analyses (Phase 1)
-│   │   ├── JobOfferUpload.jsx   # Upload offre (Phase 2)
-│   │   └── LLMSettings.jsx      # Configuration LLM (Phase 3)
+│   │   ├── HomeScreen.jsx       # Accueil et gestion projets
+│   │   ├── ProjectEditor.jsx    # Édition d'un projet
+│   │   ├── CVAnalyzerForm.jsx   # Formulaire d'analyse
+│   │   ├── AnalysisReport.jsx   # Affichage rapport
+│   │   └── AnalysisHistory.jsx  # Historique analyses
 │   ├── services/
-│   │   ├── api.py              # FastAPI
-│   │   ├── cv_analyzer.py      # Logique analyse mode simple
-│   │   ├── job_offer_parser.py # Parser offres (Phase 2)
-│   │   └── llm_manager.py      # Gestion LLMs (Phase 3)
+│   │   ├── api.py              # Backend FastAPI
+│   │   └── cv_analyzer.py      # Logique d'analyse
 │   ├── database/
 │   │   ├── models.py           # Modèles SQLAlchemy
 │   │   ├── database.py         # Configuration DB
-│   │   └── project_manager.py  # Gestion projets (Phase 1)
-│   ├── utils/
-│   │   ├── error_handling.py
-│   │   └── llm_adapters/       # Adaptateurs LLM (Phase 3)
-│   ├── theme/
-│   │   └── theme.js
+│   │   ├── project_manager.py  # CRUD projets
+│   │   └── init_db.py          # Initialisation DB
 │   ├── hooks/
-│   │   └── useProject.js       # Hook gestion projet (Phase 1)
+│   │   └── useProject.js       # Hook gestion projet
 │   └── main.jsx
-├── electron/                   # Configuration Electron (Phase 1)
-├── requirements.txt
+├── electron/
+│   ├── main.js                 # Point d'entrée Electron
+│   └── preload.js              # APIs exposées au frontend
 ├── package.json
 ├── vite.config.js
-└── index.html
+├── forge.config.js             # Config build Electron
+└── requirements.txt
 ```
 
-## 🛣️ Roadmap Détaillée
+## API Endpoints
 
-### Phase 1 - Mode Simple et Multi-Projet
-- [ ] Home screen avec liste des projets
-- [ ] CRUD des projets (create, read, update, delete)
-- [ ] Persistance des projets en SQLite
-- [ ] Refactorisation CVAnalyzerForm pour utiliser le projet sélectionné
-- [ ] Export historique des analyses par projet
-- [ ] Setup Electron pour build desktop
-- [ ] Build et packaging cross-plateforme
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | /api/projects | Liste tous les projets |
+| POST | /api/projects | Crée un projet |
+| GET | /api/projects/{id} | Récupère un projet |
+| PUT | /api/projects/{id} | Met à jour un projet |
+| DELETE | /api/projects/{id} | Supprime un projet |
+| GET | /api/projects/{id}/analyses | Historique des analyses |
+| POST | /api/projects/{id}/analyze | Lance une analyse |
+| DELETE | /api/analyses/{id} | Supprime une analyse |
+| GET | /api/health | Health check |
+
+Swagger UI disponible sur http://localhost:8000/docs
+
+## Roadmap
+
+### Phase 1 - Mode Simple (Terminé)
+- [x] Home screen avec liste des projets
+- [x] CRUD des projets
+- [x] Persistance SQLite
+- [x] CVAnalyzerForm avec projet sélectionné
+- [x] Historique des analyses par projet
+- [x] Setup Electron (mode dev)
+- [x] Dialog sélection de dossier natif
+- [ ] Build production avec PyInstaller
 
 ### Phase 2 - Offres d'Emploi
 - [ ] Composant upload d'offre
 - [ ] Parser offre (extraction requirements)
 - [ ] Modèle database pour job_offers
-- [ ] Analyse simple mode basée sur offre
-- [ ] Affichage comparatif CV vs offre
+- [ ] Analyse basée sur offre
 
 ### Phase 3 - Mode LLM
 - [ ] Adaptateurs LLM (OpenAI, Anthropic, OLLAMA)
-- [ ] Configuration et sauvegarde API keys
-- [ ] Guide setup OLLAMA dans l'app
+- [ ] Configuration API keys
+- [ ] Guide setup OLLAMA
 - [ ] LLMAnalyzer service
-- [ ] UI pour mode LLM
-- [ ] Gestion queue/worker (optim fin)
 
-## 📦 Branches
-
-- `main` : Production stable
-- `develop` : Développement principal
-- `feature/*` : Nouvelles fonctionnalités
-- `hotfix/*` : Corrections urgentes
-- `release/*` : Préparation des versions
-
-## 🤝 Contribution
-
-1. Fork le projet
-2. Créer une branche (`git checkout -b feature/amelioration`)
-3. Commit (`git commit -m 'feat: Ajout nouvelle fonctionnalité'`)
-4. Push (`git push origin feature/amelioration`)
-5. Créer une Pull Request
-
-## 📄 Licence
+## Licence
 
 MIT

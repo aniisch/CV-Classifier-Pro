@@ -2,397 +2,158 @@
 
 ## Table des Matières
 1. [Vue d'ensemble](#vue-densemble)
-2. [Architecture Phase 1](#architecture-phase-1)
-3. [Roadmap détaillée avec tâches](#roadmap-détaillée-avec-tâches)
-4. [Modèles de données](#modèles-de-données)
-5. [Guide Backend (Python)](#guide-backend-python)
-6. [Guide Frontend (React)](#guide-frontend-react)
-7. [Démarrage du projet](#démarrage-du-projet)
-8. [Phases futures](#phases-futures)
+2. [Architecture](#architecture)
+3. [Avancement Phase 1](#avancement-phase-1)
+4. [API Endpoints](#api-endpoints)
+5. [Démarrage du projet](#démarrage-du-projet)
+6. [Build Production](#build-production)
+7. [Phases futures](#phases-futures)
 
 ## Vue d'ensemble
 
-CV Classifier Pro évolue vers une application desktop multi-projets avec deux modes d'analyse:
+CV Classifier Pro est une application desktop multi-projets avec deux modes d'analyse:
 
-**Mode Simple** (Phase 1 - Actuel): Analyse par mots-clés pondérés
-**Mode LLM** (Phase 3 - Futur): Comparaison intelligente CV-Offre avec LLM
+- **Mode Simple** (Phase 1 - Terminé): Analyse par mots-clés pondérés
+- **Mode LLM** (Phase 3 - Futur): Comparaison intelligente CV-Offre avec LLM
 
-L'application utilise:
-- Backend: Python (FastAPI + SQLAlchemy)
-- Frontend: React (Material-UI + Vite)
-- Desktop: Electron (multi-plateforme)
-- Database: SQLite (local)
+### Stack Technique
 
-### Architecture globale Phase 1
+| Couche | Technologie |
+|--------|-------------|
+| Frontend | React 18 + Material-UI + Vite |
+| Backend | Python FastAPI + SQLAlchemy |
+| Desktop | Electron |
+| Database | SQLite (local) |
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │         ELECTRON APP (Desktop)                      │
+│  ├─ main.js (lance backend + fenêtre)              │
+│  └─ preload.js (APIs: selectFolder, etc.)          │
 ├─────────────────────────────────────────────────────┤
-│  FRONTEND (React)                                   │
+│  FRONTEND (React - localhost:5173)                  │
 │  ├─ HomeScreen (liste des projets)                 │
 │  ├─ ProjectEditor (édition d'un projet)            │
-│  ├─ CVAnalyzerForm (analyse simple)                │
+│  ├─ CVAnalyzerForm (formulaire analyse)            │
 │  ├─ AnalysisReport (affichage rapport)             │
 │  └─ AnalysisHistory (historique par projet)        │
 ├─────────────────────────────────────────────────────┤
-│  BACKEND (Python FastAPI)                          │
-│  ├─ ProjectManager (CRUD + persistence)            │
-│  ├─ CVAnalyzer (analyse par mots-clés)             │
-│  ├─ FileManager (chargement des CVs)               │
-│  └─ API endpoints                                   │
+│  BACKEND (Python FastAPI - localhost:8000)          │
+│  ├─ api.py (endpoints REST)                        │
+│  ├─ cv_analyzer.py (logique analyse)               │
+│  └─ project_manager.py (CRUD projets)              │
 ├─────────────────────────────────────────────────────┤
-│  DATABASE (SQLite)                                  │
+│  DATABASE (SQLite - analyses.db)                    │
 │  ├─ projects (projets créés)                       │
-│  ├─ analyses (résultats des analyses)              │
-│  └─ settings (configuration utilisateur)           │
+│  └─ analyses (résultats des analyses)              │
 └─────────────────────────────────────────────────────┘
 ```
-
-## Architecture Phase 1
 
 ### Flux de données
 
 ```
-User → HomeScreen
+User → HomeScreen (sélectionne un projet)
        ↓
-   Select/Create Project
+   CVAnalyzerForm (entre chemin dossier CVs)
        ↓
-   ProjectEditor → Save to DB
+   POST /api/projects/{id}/analyze
        ↓
-   CVAnalyzerForm (keywords + folder path)
+   Backend: CVAnalyzer traite les PDFs
        ↓
-   POST /api/analyze
+   Sauvegarde en DB (analyses table)
        ↓
-   Backend: CVAnalyzer process
-       ↓
-   Save to DB (analyses table)
-       ↓
-   AnalysisReport (display)
-       ↓
-   AnalysisHistory (persistence)
+   AnalysisReport (affiche le rapport Markdown)
 ```
 
-## Roadmap détaillée avec tâches
+## Avancement Phase 1
 
-### Phase 1 - Mode Simple et Multi-Projet
+### 1.1 - Home Screen et Gestion Projets ✅
 
-#### 1.1 - Home Screen et Gestion Projets
-**Objectif**: Écran d'accueil permettant de créer/lister/éditer/supprimer des projets
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/components/HomeScreen.jsx` | ✅ Créé | Écran d'accueil, liste projets |
+| `src/components/ProjectEditor.jsx` | ✅ Créé | Édition projet + keywords |
+| `src/components/App.jsx` | ✅ Modifié | Navigation entre écrans |
+| `src/database/project_manager.py` | ✅ Créé | CRUD projets |
+| `src/database/models.py` | ✅ Modifié | Modèle Project ajouté |
+| `src/hooks/useProject.js` | ✅ Créé | Hook gestion projets |
 
-**Fichiers à créer/modifier:**
-- [ ] `src/components/HomeScreen.jsx` - Nouvel écran d'accueil (À CRÉER)
-- [ ] `src/components/ProjectEditor.jsx` - Édition d'un projet (À CRÉER)
-- [ ] `src/components/App.jsx` - Mettre à jour pour routing HomeScreen → ProjectEditor (À MODIFIER)
-- [ ] `src/database/project_manager.py` - Service gestion projets (À CRÉER)
-- [ ] `src/database/models.py` - Ajouter modèle Project (À MODIFIER)
+### 1.2 - Refactoriser CVAnalyzerForm ✅
 
-**Features:**
-- Afficher liste de tous les projets
-- Bouton créer nouveau projet
-- Bouton éditer/supprimer projet
-- Sauvegarder les projets en BD
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/components/CVAnalyzerForm.jsx` | ✅ Modifié | Utilise project context |
+| `src/database/models.py` | ✅ Modifié | project_id dans analyses |
 
-**Tests manuels:**
-- Créer 3 projets et vérifier persistence après restart
-- Éditer un projet et vérifier changements
-- Supprimer un projet (avec confirmation)
+### 1.3 - Historique des Analyses par Projet ✅
 
----
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/components/AnalysisHistory.jsx` | ✅ Modifié | Filtré par projet |
+| `src/services/api.py` | ✅ Modifié | GET /api/projects/{id}/analyses |
 
-#### 1.2 - Refactoriser CVAnalyzerForm
-**Objectif**: Utiliser le projet sélectionné comme contexte
+### 1.4 - Setup Electron ✅
 
-**Fichiers à modifier:**
-- [ ] `src/components/CVAnalyzerForm.jsx` - Utiliser project context (À MODIFIER)
-- [ ] `src/hooks/useProject.js` - Créer hook pour gérer le projet courant (À CRÉER)
-- [ ] `src/database/models.py` - Ajouter champ project_id aux analyses (À MODIFIER)
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `electron/main.js` | ✅ Créé | Point d'entrée, lance backend |
+| `electron/preload.js` | ✅ Créé | API selectFolder exposée |
+| `package.json` | ✅ Modifié | Scripts Electron ajoutés |
+| `vite.config.js` | ✅ Modifié | Config pour Electron |
+| `forge.config.js` | ✅ Créé | Config build |
 
-**Changes:**
-- Les analyses sont liées à un projet spécifique
-- Les mots-clés sont stockés dans le projet, pas dans le formulaire
-- Afficher le nom du projet en haut du formulaire
+### 1.5 - Build Production ⏳
 
----
+| Tâche | Status | Description |
+|-------|--------|-------------|
+| PyInstaller backend | ⏳ À faire | Créer backend.exe |
+| Electron Forge make | ⏳ À faire | Build .exe final |
 
-#### 1.3 - Historique des Analyses par Projet
-**Objectif**: Afficher et gérer l'historique des analyses pour le projet courant
+## API Endpoints
 
-**Fichiers à modifier:**
-- [ ] `src/components/AnalysisHistory.jsx` - Filtrer par projet (À MODIFIER)
-- [ ] `src/services/api.py` - Endpoint GET /api/projects/{id}/analyses (À CRÉER)
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/api/projects` | Liste tous les projets |
+| POST | `/api/projects` | Crée un projet |
+| GET | `/api/projects/{id}` | Récupère un projet |
+| PUT | `/api/projects/{id}` | Met à jour un projet |
+| DELETE | `/api/projects/{id}` | Supprime un projet |
+| GET | `/api/projects/{id}/analyses` | Historique des analyses |
+| POST | `/api/projects/{id}/analyze` | Lance une analyse |
+| DELETE | `/api/analyses/{id}` | Supprime une analyse |
+| GET | `/api/health` | Health check |
 
-**Changes:**
-- Lister uniquement les analyses du projet sélectionné
-- Garder fonctionnalités: delete, export, etc.
+### Exemple requête analyse
 
----
+```bash
+POST /api/projects/abc123/analyze
+Content-Type: application/json
 
-#### 1.4 - Setup Electron
-**Objectif**: Configuration pour build desktop
-
-**Fichiers à créer/modifier:**
-- [ ] `electron/main.js` - Point d'entrée Electron (À CRÉER)
-- [ ] `electron/preload.js` - Bridge Electron (À CRÉER si nécessaire)
-- [ ] `package.json` - Ajouter dépendances Electron et scripts (À MODIFIER)
-- [ ] `vite.config.js` - Configuration Electron (À MODIFIER)
-- [ ] `forge.config.js` - Configuration Electron Forge (À CRÉER)
-
-**Scripts npm à ajouter:**
-- `npm run electron-dev` - Lancer en dev
-- `npm run electron-build` - Build cross-plateforme
-- `npm run make:win` - Build Windows .exe
-- `npm run make:mac` - Build macOS .dmg
-- `npm run make:linux` - Build Linux .AppImage
-
-**Tests:**
-- Build et exécuter sur Windows/Mac/Linux
-
----
-
-### Phase 2 - Offres d'Emploi
-
-#### 2.1 - Upload et Parser Offre
-**Objectif**: Permettre l'upload d'une offre d'emploi et extraire les requirements
-
-**Fichiers à créer:**
-- [ ] `src/components/JobOfferUpload.jsx` - Interface upload (À CRÉER)
-- [ ] `src/services/job_offer_parser.py` - Parser PDF/TXT (À CRÉER)
-- [ ] `src/database/models.py` - Ajouter modèle JobOffer (À MODIFIER)
-
-**Features:**
-- Upload PDF ou TXT
-- Extraire et afficher les requirements
-- Sauvegarder l'offre en BD
-
----
-
-### Phase 3 - Mode LLM
-
-#### 3.1 - Configuration LLM
-**Objectif**: Permettre la configuration des LLM
-
-**Fichiers à créer:**
-- [ ] `src/components/LLMSettings.jsx` - Interface configuration (À CRÉER)
-- [ ] `src/services/llm_manager.py` - Gestion LLM (À CRÉER)
-- [ ] `src/utils/llm_adapters/openai_adapter.py` - Adapter OpenAI (À CRÉER)
-- [ ] `src/utils/llm_adapters/anthropic_adapter.py` - Adapter Anthropic (À CRÉER)
-- [ ] `src/utils/llm_adapters/ollama_adapter.py` - Adapter OLLAMA (À CRÉER)
-- [ ] `src/database/models.py` - Ajouter modèle LLMConfig (À MODIFIER)
-
-**Features:**
-- Configuration multi-provider (OpenAI, Anthropic, OLLAMA)
-- Sauvegarde sécurisée des API keys
-- Guide setup OLLAMA dans l'app
-
----
-
-## Modèles de données
-
-### Schéma SQLite Phase 1
-
-```sql
--- Projets utilisateur
-CREATE TABLE projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  mode TEXT DEFAULT 'simple',  -- 'simple' ou 'llm'
-  keywords JSON,  -- {"keyword": weight, ...}
-  created_at TIMESTAMP,
-  updated_at TIMESTAMP
-);
-
--- Analyses
-CREATE TABLE analyses (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  timestamp TIMESTAMP,
-  mode TEXT,  -- 'simple' ou 'llm'
-  results JSON,  -- [{filename, score, found_keywords, ...}, ...]
-  report TEXT,  -- Markdown content
-  FOREIGN KEY(project_id) REFERENCES projects(id)
-);
-
--- Offres (Phase 2)
-CREATE TABLE job_offers (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  content TEXT,
-  parsed_requirements JSON,
-  created_at TIMESTAMP,
-  FOREIGN KEY(project_id) REFERENCES projects(id)
-);
-
--- Configuration LLM (Phase 3)
-CREATE TABLE llm_configs (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  provider TEXT,  -- 'openai', 'anthropic', 'ollama'
-  model TEXT,
-  api_key TEXT,  -- Chiffré
-  ollama_url TEXT,
-  created_at TIMESTAMP,
-  FOREIGN KEY(project_id) REFERENCES projects(id)
-);
-```
-
-### Structures Pydantic (API)
-
-```python
-# Phase 1
-class Project(BaseModel):
-    id: str
-    name: str
-    description: str
-    mode: str = "simple"
-    keywords: dict
-    created_at: datetime
-    updated_at: datetime
-
-class Analysis(BaseModel):
-    id: str
-    project_id: str
-    timestamp: datetime
-    mode: str
-    results: list
-    report: str
-
-# Phase 2
-class JobOffer(BaseModel):
-    id: str
-    project_id: str
-    content: str
-    parsed_requirements: list
-
-# Phase 3
-class LLMConfig(BaseModel):
-    id: str
-    project_id: str
-    provider: str
-    model: str
-    ollama_url: str = None
-```
-
-## Guide Backend (Python)
-
-### Structure Backend
-
-```
-src/services/
-├── api.py                    # FastAPI app + endpoints
-├── cv_analyzer.py            # Analyse CVs (à garder)
-├── job_offer_parser.py       # Parser offres (Phase 2)
-└── llm_manager.py            # Gestion LLM (Phase 3)
-
-src/database/
-├── database.py               # Config SQLAlchemy + connexion
-├── models.py                 # Modèles ORM
-├── project_manager.py        # CRUD projets
-└── analyses.db               # Fichier SQLite
-
-src/utils/
-├── error_handling.py         # À garder
-└── llm_adapters/             # Adaptateurs LLM (Phase 3)
-    ├── base_adapter.py
-    ├── openai_adapter.py
-    ├── anthropic_adapter.py
-    └── ollama_adapter.py
-```
-
-### API Endpoints Phase 1
-
-```python
-# Projets
-GET    /api/projects              # Lister tous les projets
-POST   /api/projects              # Créer un projet
-GET    /api/projects/{id}         # Récupérer un projet
-PUT    /api/projects/{id}         # Mettre à jour un projet
-DELETE /api/projects/{id}         # Supprimer un projet
-
-# Analyses (pour un projet)
-GET    /api/projects/{id}/analyses     # Lister les analyses
-POST   /api/projects/{id}/analyze      # Lancer une analyse
-DELETE /api/analyses/{analysis_id}     # Supprimer une analyse
-
-# Health
-GET    /api/health                # Vérifier la connexion
-```
-
-### Exemple endpoint analyse Phase 1
-
-```python
-@app.post("/api/projects/{project_id}/analyze")
-async def analyze_cvs_for_project(project_id: str, request: AnalyzeRequest):
-    """
-    Request body:
-    {
-        "folder_path": "chemin/vers/cvs"
-    }
-
-    Récupère les keywords du projet en BD
-    Lance l'analyse
-    Sauvegarde le résultat
-    """
-```
-
-## Guide Frontend (React)
-
-### Structure Components Phase 1
-
-```
-src/components/
-├── App.jsx                      # Router principal
-├── HomeScreen.jsx               # Accueil + liste projets
-├── ProjectEditor.jsx            # Édition d'un projet
-├── CVAnalyzerForm.jsx           # Formulaire analyse (à adapter)
-├── AnalysisReport.jsx           # Affichage rapport
-├── AnalysisHistory.jsx          # Historique (à adapter)
-├── ErrorAlert.jsx               # À garder
-└── ErrorBoundary.jsx            # À garder
-```
-
-### Hooks Phase 1
-
-```
-src/hooks/
-├── useError.js                  # À garder
-└── useProject.js                # Nouveau - gestion projet courant
-```
-
-### State Management
-
-Utiliser React Context pour:
-- Projet sélectionné courant
-- Liste des projets (pour HomeScreen)
-- Erreurs
-
-```javascript
-// useProject.js example
-function useProject() {
-  const [currentProject, setCurrentProject] = useState(null);
-  const [projects, setProjects] = useState([]);
-
-  const fetchProjects = async () => { /* ... */ };
-  const selectProject = async (id) => { /* ... */ };
-  const createProject = async (data) => { /* ... */ };
-  // etc.
+{
+  "folder_path": "C:\\Users\\user\\CVs"
 }
 ```
 
 ## Démarrage du projet
 
-### 1. Installation initiale
+### Installation
 
 ```bash
-# Backend
+# Dépendances Node.js
+npm install
+
+# Dépendances Python
 pip install -r requirements.txt
 
-# Frontend
-npm install
+# Initialiser la DB (première fois)
+cd src/database && python init_db.py && cd ../..
 ```
 
-### 2. Lancement en développement (Phase 1)
+### Mode Développement
+
+#### Option 1 : Web (navigateur)
 
 ```bash
 # Terminal 1 - Backend
@@ -400,35 +161,79 @@ uvicorn src.services.api:app --reload --port 8000
 
 # Terminal 2 - Frontend
 npm run start
-
-# Frontend sera accessible sur http://localhost:5173
-# Backend sur http://localhost:8000
 ```
 
-### 3. Vérification connexion
+Ouvrir http://localhost:5173
+
+#### Option 2 : Desktop (Electron)
+
+```bash
+# Lance tout (frontend + backend + Electron)
+npm run electron-dev
+```
+
+### Vérification
 
 - Frontend: http://localhost:5173
-- Backend: http://localhost:8000/docs (Swagger)
-- DB: `src/database/analyses.db` (SQLite)
+- Backend Swagger: http://localhost:8000/docs
+- Database: `src/database/analyses.db`
+
+## Build Production
+
+### Étape 1 : Créer l'exécutable backend
+
+```bash
+# Installer PyInstaller
+pip install pyinstaller
+
+# Créer l'exe
+pyinstaller --onefile --name backend --add-data "src/database/analyses.db;." src/services/api.py
+
+# Copier dans electron
+mkdir electron/backend
+copy dist\backend.exe electron\backend\
+```
+
+### Étape 2 : Build Electron
+
+```bash
+# Windows
+npm run make:win
+
+# macOS
+npm run make:mac
+
+# Linux
+npm run make:linux
+```
+
+Les fichiers seront dans `out/make/`.
 
 ## Phases futures
 
 ### Phase 2 - Offres d'Emploi
-1. Créer composant JobOfferUpload
-2. Implémenter parser PDF/TXT
-3. Modifier CVAnalyzerForm pour utiliser l'offre
-4. Ajouter endpoint /api/projects/{id}/analyze-with-offer
+
+| Tâche | Fichier | Description |
+|-------|---------|-------------|
+| Upload offre | `src/components/JobOfferUpload.jsx` | Interface upload PDF/TXT |
+| Parser | `src/services/job_offer_parser.py` | Extraction requirements |
+| Modèle | `src/database/models.py` | Table job_offers |
+| Analyse | `src/services/api.py` | Endpoint analyze-with-offer |
 
 ### Phase 3 - Mode LLM
-1. Implémenter adaptateurs LLM
-2. Ajouter configuration sécurisée des API keys
-3. Créer UI pour mode LLM
-4. Guide setup OLLAMA intégré dans l'app
-5. Endpoint /api/projects/{id}/analyze-with-llm
 
-### Optimisations
-1. Queue/Worker pour gros batches
-2. Caching et indexing
-3. Tests unitaires
-4. Logging structuré
-5. CI/CD pipeline
+| Tâche | Fichier | Description |
+|-------|---------|-------------|
+| Settings | `src/components/LLMSettings.jsx` | Config LLM |
+| Manager | `src/services/llm_manager.py` | Orchestration |
+| OpenAI | `src/utils/llm_adapters/openai_adapter.py` | Adapter |
+| Anthropic | `src/utils/llm_adapters/anthropic_adapter.py` | Adapter |
+| OLLAMA | `src/utils/llm_adapters/ollama_adapter.py` | Adapter local |
+| Guide | Intégré dans l'app | Setup OLLAMA |
+
+### Optimisations futures
+
+- [ ] Queue/Worker pour gros batches
+- [ ] Tests unitaires
+- [ ] CI/CD pipeline
+- [ ] Auto-update Electron

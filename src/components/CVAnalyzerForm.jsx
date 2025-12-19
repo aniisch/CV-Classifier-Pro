@@ -94,9 +94,21 @@ const CVAnalyzerForm = ({ project, onAnalysisComplete, onAnalysisStart }) => {
           />
           <Button
             variant="outlined"
-            onClick={() => {
-              const path = window.prompt('Entrez le chemin du dossier:');
-              if (path) setFolderPath(path);
+            onClick={async () => {
+              // Vérifie si on est dans Electron avec l'API disponible
+              if (window.electronAPI?.selectFolder) {
+                try {
+                  const selectedPath = await window.electronAPI.selectFolder();
+                  if (selectedPath) setFolderPath(selectedPath);
+                } catch (err) {
+                  console.error('Erreur sélection dossier:', err);
+                  setError('Erreur lors de la sélection du dossier');
+                }
+              } else {
+                // En mode web ou si preload pas chargé, on ne fait rien
+                // L'utilisateur doit taper le chemin manuellement
+                setError('Tapez le chemin du dossier manuellement dans le champ ci-dessus');
+              }
             }}
             disabled={loading}
             sx={{ whiteSpace: 'nowrap' }}
