@@ -22,7 +22,7 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(String, ForeignKey('projects.id'), nullable=False)
+    project_id = Column(String, ForeignKey('projects.id'), nullable=True)
     date = Column(DateTime, default=datetime.now)
     folder_path = Column(String)
     keywords = Column(JSON)  # Stocke les mots-clés et leurs pondérations
