@@ -32,7 +32,23 @@ function startBackend() {
       log(`Dev mode: ${backendPath} ${args.join(' ')}`);
     } else {
       // En production : lance l'exe PyInstaller
-      backendPath = path.join(rootPath, 'backend', 'backend.exe');
+      // Cherche dans plusieurs emplacements possibles
+      const possiblePaths = [
+        path.join(rootPath, 'backend', 'backend.exe'),
+        path.join(rootPath, 'electron', 'backend', 'backend.exe'),
+        path.join(process.resourcesPath, 'backend', 'backend.exe'),
+        path.join(path.dirname(process.execPath), 'backend', 'backend.exe')
+      ];
+
+      backendPath = possiblePaths.find(p => {
+        try {
+          require('fs').accessSync(p);
+          return true;
+        } catch {
+          return false;
+        }
+      }) || possiblePaths[0];
+
       args = [];
       log(`Prod mode: ${backendPath}`);
     }
@@ -95,6 +111,10 @@ function stopBackend() {
 
 function createWindow() {
   log('Création de la fenêtre...');
+  log(`isDev: ${isDev}`);
+  log(`__dirname: ${__dirname}`);
+  log(`app.getAppPath(): ${app.getAppPath()}`);
+  log(`process.resourcesPath: ${process.resourcesPath}`);
 
   const preloadPath = path.join(__dirname, 'preload.js');
   log(`Preload path: ${preloadPath}`);
@@ -104,7 +124,6 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    icon: path.join(__dirname, '../public/icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -115,12 +134,27 @@ function createWindow() {
   });
 
   // URL à charger
-  const url = isDev
-    ? 'http://localhost:5173'
-    : `file://${path.join(__dirname, '../dist/index.html')}`;
+  let url;
+  if (isDev) {
+    url = 'http://localhost:5173';
+  } else {
+    // En production, dist est à la racine de l'app
+    const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
+    log(`Index path: ${indexPath}`);
+    url = `file://${indexPath}`;
+  }
 
   log(`Chargement de: ${url}`);
   mainWindow.loadURL(url);
+
+  // Log des erreurs de chargement
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    log(`Erreur de chargement: ${errorCode} - ${errorDescription}`);
+  });
+
+  mainWindow.webContents.on('console-message', (event, level, message) => {
+    log(`Console [${level}]: ${message}`);
+  });
 
   // Afficher quand prêt
   mainWindow.once('ready-to-show', () => {

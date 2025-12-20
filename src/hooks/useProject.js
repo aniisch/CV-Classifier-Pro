@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { apiUrl } from '../config';
 
 export function useProject() {
   const [currentProject, setCurrentProject] = useState(null);
@@ -10,7 +11,7 @@ export function useProject() {
   const fetchProjects = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/projects');
+      const response = await fetch(apiUrl('/api/projects'));
       if (!response.ok) throw new Error('Erreur lors de la récupération des projets');
       const data = await response.json();
       setProjects(data);
@@ -27,7 +28,7 @@ export function useProject() {
   const fetchProject = useCallback(async (projectId) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${projectId}`);
+      const response = await fetch(apiUrl(`/api/projects/${projectId}`));
       if (!response.ok) throw new Error('Projet non trouvé');
       const data = await response.json();
       setCurrentProject(data);
@@ -46,7 +47,7 @@ export function useProject() {
   const createProject = useCallback(async (name, description = '', keywords = {}) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/projects', {
+      const response = await fetch(apiUrl('/api/projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description, keywords })
@@ -70,7 +71,7 @@ export function useProject() {
   const updateProject = useCallback(async (projectId, updates) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(apiUrl(`/api/projects/${projectId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -94,7 +95,7 @@ export function useProject() {
   const deleteProject = useCallback(async (projectId) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(apiUrl(`/api/projects/${projectId}`), {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Erreur lors de la suppression du projet');

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../config';
 import { 
   Box, 
   Paper,
@@ -39,7 +40,7 @@ const AnalysisHistory = ({ projectId, onAnalysisSelect }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/analyses`);
+      const response = await fetch(apiUrl(`/api/projects/${projectId}/analyses`));
       if (!response.ok) {
         // Phase 1.3 n'est pas encore implémenté, on ignore silencieusement
         setAnalyses([]);
@@ -90,7 +91,7 @@ const AnalysisHistory = ({ projectId, onAnalysisSelect }) => {
     if (!analysisToDelete) return;
     
     try {
-      const response = await fetch(`/api/analyses/${analysisToDelete.id}`, {
+      const response = await fetch(apiUrl(`/api/analyses/${analysisToDelete.id}`), {
         method: 'DELETE'
       });
       

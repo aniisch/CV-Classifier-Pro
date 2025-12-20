@@ -74,22 +74,31 @@ npm run electron-dev
 
 ## Build Production
 
-### Étape 1 : Créer l'exécutable backend avec PyInstaller
+### Option 1 : Script automatique (recommandé)
 
 ```bash
-# Installer PyInstaller
+# Installer PyInstaller si pas déjà fait
 pip install pyinstaller
 
-# Créer l'exe du backend
-pyinstaller --onefile --name backend src/services/api.py
-# L'exe sera dans dist/backend.exe
-
-# Copier dans le dossier electron
-mkdir -p electron/backend
-cp dist/backend.exe electron/backend/
+# Lancer le build complet
+python build_release.py
 ```
 
-### Étape 2 : Build l'application Electron
+Ce script effectue automatiquement :
+1. Build du backend Python avec PyInstaller
+2. Build du frontend React avec Vite
+3. Package de l'application Electron
+
+### Option 2 : Build manuel
+
+#### Étape 1 : Créer l'exécutable backend
+
+```bash
+pip install pyinstaller
+python build_backend.py
+```
+
+#### Étape 2 : Build l'application Electron
 
 ```bash
 # Build pour Windows (.exe)
@@ -103,6 +112,8 @@ npm run make:linux
 ```
 
 Les fichiers de distribution seront dans `out/make/`.
+
+
 
 ## Structure du Projet
 
@@ -161,7 +172,8 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Historique des analyses par projet
 - [x] Setup Electron (mode dev)
 - [x] Dialog sélection de dossier natif
-- [ ] Build production avec PyInstaller
+- [x] Build production avec PyInstaller
+- [x] Scripts de build automatisés
 
 ### Phase 2 - Offres d'Emploi
 - [ ] Composant upload d'offre

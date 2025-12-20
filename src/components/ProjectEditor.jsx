@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../config';
 import {
   Container,
   Box,
@@ -100,7 +101,7 @@ function ProjectEditor({ project, onBack, onSave }) {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/projects/${project.id}`, {
+      const response = await fetch(apiUrl(`/api/projects/${project.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../config';
 import {
   Box,
   TextField,
@@ -52,7 +53,7 @@ const CVAnalyzerForm = ({ project, onAnalysisComplete, onAnalysisStart }) => {
       setLoading(true);
       onAnalysisStart?.();
 
-      const response = await fetch(`/api/projects/${project.id}/analyze`, {
+      const response = await fetch(apiUrl(`/api/projects/${project.id}/analyze`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: folderPath }),

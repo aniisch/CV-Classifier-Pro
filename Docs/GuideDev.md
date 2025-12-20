@@ -104,12 +104,13 @@ User → HomeScreen (sélectionne un projet)
 | `vite.config.js` | ✅ Modifié | Config pour Electron |
 | `forge.config.js` | ✅ Créé | Config build |
 
-### 1.5 - Build Production ⏳
+### 1.5 - Build Production ✅
 
 | Tâche | Status | Description |
 |-------|--------|-------------|
-| PyInstaller backend | ⏳ À faire | Créer backend.exe |
-| Electron Forge make | ⏳ À faire | Build .exe final |
+| PyInstaller backend | ✅ Créé | `build_backend.py` crée backend.exe |
+| Electron Forge make | ✅ Configuré | `npm run make:win` |
+| Script automatisé | ✅ Créé | `build_release.py` fait tout |
 
 ## API Endpoints
 
@@ -180,34 +181,28 @@ npm run electron-dev
 
 ## Build Production
 
-### Étape 1 : Créer l'exécutable backend
+### Option 1 : Script automatique (recommandé)
 
 ```bash
-# Installer PyInstaller
 pip install pyinstaller
-
-# Créer l'exe
-pyinstaller --onefile --name backend --add-data "src/database/analyses.db;." src/services/api.py
-
-# Copier dans electron
-mkdir electron/backend
-copy dist\backend.exe electron\backend\
+python build_release.py
 ```
 
-### Étape 2 : Build Electron
+### Option 2 : Build manuel
 
 ```bash
-# Windows
-npm run make:win
+# Étape 1 : Backend
+pip install pyinstaller
+python build_backend.py
 
-# macOS
-npm run make:mac
-
-# Linux
-npm run make:linux
+# Étape 2 : Electron
+npm run make:win    # Windows
+npm run make:mac    # macOS
+npm run make:linux  # Linux
 ```
 
 Les fichiers seront dans `out/make/`.
+
 
 ## Phases futures
 
