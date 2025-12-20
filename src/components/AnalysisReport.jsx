@@ -1,6 +1,6 @@
 import React from 'react';
-import { 
-  Paper, 
+import {
+  Paper,
   Box,
   IconButton,
   Tooltip,
@@ -15,8 +15,8 @@ const AnalysisReport = ({ report, onExportPDF }) => {
 
   return (
     <Box sx={{ position: 'relative' }}>
-      <Box 
-        sx={{ 
+      <Box
+        sx={{
           position: 'absolute',
           top: 16,
           right: 16,
@@ -33,14 +33,14 @@ const AnalysisReport = ({ report, onExportPDF }) => {
           </IconButton>
         </Tooltip>
       </Box>
-      
+
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 3, pr: 8 }}>
         📋 Rapport d'Analyse
       </Typography>
 
-      <Box 
+      <Box
         className="report-content"
-        sx={{ 
+        sx={{
           '& table': {
             borderCollapse: 'collapse',
             width: '100%',
@@ -101,7 +101,7 @@ const AnalysisReport = ({ report, onExportPDF }) => {
           }
         }}
       >
-        <ReactMarkdown 
+        <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
             h1: ({ node, ...props }) => (

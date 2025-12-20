@@ -171,8 +171,8 @@ cython_debug/
 .pypirc
 
 # Also
-complete-architecture.md 
+unutil/
 cvs/*
-explications.md
 node_modules
 exports/*
+
