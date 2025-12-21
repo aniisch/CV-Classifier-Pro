@@ -24,7 +24,7 @@ def run_command(cmd, cwd=None, shell=True):
 
 def build():
     print("=" * 60)
-    print("BUILD RELEASE - CV Classifier Pro v1.0.0")
+    print("BUILD RELEASE - CV Classifier Pro v2.0.0")
     print("=" * 60)
 
     root = Path(__file__).parent
@@ -55,6 +55,14 @@ else:
     base_path = os.path.dirname(os.path.abspath(__file__))
 
 sys.path.insert(0, base_path)
+
+# Initialiser la base de donnees au demarrage
+from src.database.database import engine
+from src.database.models import Base
+
+print("Initialisation de la base de donnees...")
+Base.metadata.create_all(bind=engine)
+print("Base de donnees prete!")
 
 from src.services.api import app
 

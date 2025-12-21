@@ -15,10 +15,13 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Deu
 - Mode hors-ligne complet
 - Application desktop Electron avec sélection native de dossiers
 
-### Phase 2 - Gestion des Offres d'Emploi (Prochain)
+### Phase 2 - Gestion des Offres d'Emploi (Termine)
 - Upload d'offres d'emploi (PDF/TXT)
-- Parsing automatique pour extraire les requirements
-- Analyse basée sur l'offre avec matching de mots-clés
+- Parsing automatique pour extraire les requirements techniques
+- Detection de 100+ mots-cles techniques (langages, frameworks, outils)
+- Ponderation automatique des requirements
+- Analyse basee sur l'offre avec matching de mots-cles
+- Choix du mode d'analyse : mots-cles manuels ou offre d'emploi
 
 ### Phase 3 - Mode LLM (Futur)
 - Support multi-provider LLM : OpenAI, Anthropic, OLLAMA
@@ -158,6 +161,12 @@ cv-classifier-pro/
 | GET | /api/projects/{id}/analyses | Historique des analyses |
 | POST | /api/projects/{id}/analyze | Lance une analyse |
 | DELETE | /api/analyses/{id} | Supprime une analyse |
+| POST | /api/projects/{id}/job-offers | Upload une offre d'emploi |
+| GET | /api/projects/{id}/job-offers | Liste les offres du projet |
+| GET | /api/job-offers/{id} | Detail d'une offre |
+| PUT | /api/job-offers/{id} | Modifie les requirements |
+| DELETE | /api/job-offers/{id} | Supprime une offre |
+| POST | /api/projects/{id}/analyze-offer/{offer_id} | Analyse avec offre |
 | GET | /api/health | Health check |
 
 Swagger UI disponible sur http://localhost:8000/docs
@@ -175,11 +184,13 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Build production avec PyInstaller
 - [x] Scripts de build automatisés
 
-### Phase 2 - Offres d'Emploi
-- [ ] Composant upload d'offre
-- [ ] Parser offre (extraction requirements)
-- [ ] Modèle database pour job_offers
-- [ ] Analyse basée sur offre
+### Phase 2 - Offres d'Emploi (Termine)
+- [x] Composant upload d'offre (JobOfferUpload)
+- [x] Parser offre (extraction requirements techniques)
+- [x] Modele database pour job_offers
+- [x] API endpoints CRUD offres
+- [x] Analyse basee sur offre
+- [x] Integration dans CVAnalyzerForm (choix mode)
 
 ### Phase 3 - Mode LLM
 - [ ] Adaptateurs LLM (OpenAI, Anthropic, OLLAMA)

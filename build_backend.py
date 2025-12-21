@@ -33,6 +33,14 @@ else:
 
 sys.path.insert(0, base_path)
 
+# Importer et creer les tables de la base de donnees
+from src.database.database import engine
+from src.database.models import Base
+
+print("Initialisation de la base de donnees...")
+Base.metadata.create_all(bind=engine)
+print("Base de donnees prete!")
+
 from src.services.api import app
 
 if __name__ == "__main__":

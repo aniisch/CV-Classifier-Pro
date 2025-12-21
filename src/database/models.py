@@ -17,12 +17,25 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+class JobOffer(Base):
+    """Modèle pour stocker les offres d'emploi"""
+    __tablename__ = "job_offers"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey('projects.id'), nullable=False)
+    filename = Column(String, nullable=False)
+    raw_content = Column(String)  # Texte extrait du fichier
+    requirements = Column(JSON, default={})  # {"keyword": weight, ...}
+    created_at = Column(DateTime, default=datetime.now)
+
+
 class Analysis(Base):
     """Modèle pour stocker l'historique des analyses"""
     __tablename__ = "analyses"
 
     id = Column(Integer, primary_key=True)
     project_id = Column(String, ForeignKey('projects.id'), nullable=True)
+    job_offer_id = Column(String, ForeignKey('job_offers.id'), nullable=True)  # Si analyse basée sur offre
     date = Column(DateTime, default=datetime.now)
     folder_path = Column(String)
     keywords = Column(JSON)  # Stocke les mots-clés et leurs pondérations
