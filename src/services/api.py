@@ -6,9 +6,11 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..database.database import get_db
-from ..database.models import Analysis, Project
+from ..database.models import Analysis, Project, JobOffer
 from ..database.project_manager import ProjectManager
+from ..database.job_offer_manager import JobOfferManager
 from .cv_analyzer import CVAnalyzer
+from .job_offer_parser import JobOfferParser
 from ..utils.error_handling import (
     handle_application_error,
     validate_keywords,
@@ -52,6 +54,26 @@ class AnalysisResponse(BaseModel):
     date: datetime
     report: str
     keywords: Dict[str, float]
+
+    class Config:
+        from_attributes = True
+
+
+class JobOfferRequest(BaseModel):
+    file_path: str
+
+
+class JobOfferUpdateRequest(BaseModel):
+    requirements: Dict[str, float]
+
+
+class JobOfferResponse(BaseModel):
+    id: str
+    project_id: str
+    filename: str
+    raw_content: Optional[str] = None
+    requirements: Dict[str, float]
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -235,3 +257,168 @@ async def delete_analysis(analysis_id: int, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Erreur lors de la suppression de l'analyse")
+
+
+# ===== JOB OFFER ENDPOINTS =====
+
+@app.post("/api/projects/{project_id}/job-offers")
+async def create_job_offer(project_id: str, request: JobOfferRequest, db: Session = Depends(get_db)):
+    """Upload et parse une offre d'emploi"""
+    try:
+        # Verifier que le projet existe
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouve")
+
+        file_path = request.file_path
+
+        # Verifier que le fichier existe
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=400, detail=f"Fichier non trouve: {file_path}")
+
+        # Parser le fichier
+        try:
+            parsed = JobOfferParser.process_file(file_path)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Extraire le nom du fichier
+        filename = os.path.basename(file_path)
+
+        # Creer l'offre en base
+        job_offer = JobOfferManager.create_job_offer(
+            db,
+            project_id=project_id,
+            filename=filename,
+            raw_content=parsed["raw_content"],
+            requirements=parsed["requirements"]
+        )
+
+        return JobOfferManager.job_offer_to_dict(job_offer)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in create_job_offer: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/projects/{project_id}/job-offers")
+async def get_project_job_offers(project_id: str, db: Session = Depends(get_db)):
+    """Liste toutes les offres d'emploi d'un projet"""
+    try:
+        # Verifier que le projet existe
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouve")
+
+        job_offers = JobOfferManager.get_job_offers_by_project(db, project_id)
+        return [JobOfferManager.job_offer_to_dict(jo) for jo in job_offers]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/job-offers/{offer_id}")
+async def get_job_offer(offer_id: str, db: Session = Depends(get_db)):
+    """Recupere une offre d'emploi specifique"""
+    try:
+        job_offer = JobOfferManager.get_job_offer(db, offer_id)
+        if not job_offer:
+            raise HTTPException(status_code=404, detail="Offre non trouvee")
+        return JobOfferManager.job_offer_to_dict(job_offer)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/job-offers/{offer_id}")
+async def update_job_offer(offer_id: str, request: JobOfferUpdateRequest, db: Session = Depends(get_db)):
+    """Met a jour les requirements d'une offre"""
+    try:
+        job_offer = JobOfferManager.update_job_offer(
+            db,
+            offer_id,
+            requirements=request.requirements
+        )
+        if not job_offer:
+            raise HTTPException(status_code=404, detail="Offre non trouvee")
+        return JobOfferManager.job_offer_to_dict(job_offer)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/job-offers/{offer_id}")
+async def delete_job_offer(offer_id: str, db: Session = Depends(get_db)):
+    """Supprime une offre d'emploi"""
+    try:
+        success = JobOfferManager.delete_job_offer(db, offer_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Offre non trouvee")
+        return {"message": "Offre supprimee avec succes"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/projects/{project_id}/analyze-offer/{offer_id}")
+async def analyze_with_job_offer(project_id: str, offer_id: str, request: dict, db: Session = Depends(get_db)):
+    """Analyse les CVs en utilisant les requirements d'une offre d'emploi"""
+    try:
+        # Verifier que le projet existe
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouve")
+
+        # Verifier que l'offre existe et appartient au projet
+        job_offer = JobOfferManager.get_job_offer(db, offer_id)
+        if not job_offer:
+            raise HTTPException(status_code=404, detail="Offre non trouvee")
+        if job_offer.project_id != project_id:
+            raise HTTPException(status_code=400, detail="L'offre n'appartient pas a ce projet")
+
+        # Extraire folder_path et keywords de l'offre
+        folder_path = request.get('folder_path')
+        keywords = job_offer.requirements
+
+        if not folder_path:
+            raise HTTPException(status_code=400, detail="folder_path requis")
+
+        if not keywords:
+            raise HTTPException(status_code=400, detail="Aucun requirement dans l'offre")
+
+        # Convertir les keywords en floats
+        keywords = {k: float(v) for k, v in keywords.items()}
+
+        # Lancer l'analyse avec CVAnalyzer
+        analyzer = CVAnalyzer(folder_path, keywords)
+        results = analyzer.analyze_cvs()
+        report = analyzer.generate_markdown_report(results)
+
+        # Sauvegarder l'analyse en DB avec reference a l'offre
+        analysis = Analysis(
+            project_id=project_id,
+            job_offer_id=offer_id,
+            date=datetime.now(),
+            report=report,
+            keywords=keywords,
+            folder_path=folder_path
+        )
+        db.add(analysis)
+        db.commit()
+        db.refresh(analysis)
+
+        return {"report": report}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in analyze_with_job_offer: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

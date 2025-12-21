@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
   Box,
   Alert,
   Paper,
-  Fade,
-  Grow,
   LinearProgress,
   Button
 } from '@mui/material';
@@ -17,14 +15,38 @@ import ProjectEditor from './ProjectEditor';
 import CVAnalyzerForm from './CVAnalyzerForm';
 import AnalysisReport from './AnalysisReport';
 import AnalysisHistory from './AnalysisHistory';
+import JobOfferUpload from './JobOfferUpload';
+import JobOfferList from './JobOfferList';
+import { apiUrl } from '../config';
 
 function App() {
-  const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor'
+  const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor', 'jobofferupload'
   const [currentProject, setCurrentProject] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [jobOffers, setJobOffers] = useState([]);
+
+  // Charger les offres d'emploi quand on entre dans l'analyzer
+  useEffect(() => {
+    if (screen === 'analyzer' && currentProject) {
+      fetchJobOffers();
+    }
+  }, [screen, currentProject?.id]);
+
+  const fetchJobOffers = async () => {
+    if (!currentProject) return;
+    try {
+      const response = await fetch(apiUrl(`/api/projects/${currentProject.id}/job-offers`));
+      if (response.ok) {
+        const data = await response.json();
+        setJobOffers(data);
+      }
+    } catch (err) {
+      console.error('Erreur chargement offres:', err);
+    }
+  };
 
   const handleAnalysisComplete = (data) => {
     setLoading(false);
@@ -32,7 +54,7 @@ function App() {
       setReport(data.report);
       setError(null);
     } else {
-      setError('Format de réponse invalide');
+      setError('Format de reponse invalide');
     }
   };
 
@@ -55,7 +77,7 @@ function App() {
     try {
       const element = document.querySelector('.report-content');
       if (!element) {
-        throw new Error('Élément rapport non trouvé');
+        throw new Error('Element rapport non trouve');
       }
 
       const now = new Date();
@@ -86,6 +108,7 @@ function App() {
     setCurrentProject(project);
     setScreen('analyzer');
     setReport(null);
+    setJobOffers([]);
   };
 
   const handleEditProject = (project) => {
@@ -97,6 +120,7 @@ function App() {
     setScreen('home');
     setCurrentProject(null);
     setReport(null);
+    setJobOffers([]);
   };
 
   const handleBackToAnalyzer = () => {
@@ -105,6 +129,15 @@ function App() {
 
   const handleProjectSave = (project) => {
     setCurrentProject(project);
+    setScreen('analyzer');
+  };
+
+  const handleAddJobOffer = () => {
+    setScreen('jobofferupload');
+  };
+
+  const handleJobOfferUploadComplete = (jobOffer) => {
+    setJobOffers(prev => [jobOffer, ...prev]);
     setScreen('analyzer');
   };
 
@@ -117,11 +150,11 @@ function App() {
       {screen === 'analyzer' && currentProject && (
         <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
           <Container maxWidth="lg">
-            {/* Header avec bouton éditer */}
+            {/* Header avec bouton editer */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
               <Box>
                 <Button startIcon={<BackIcon />} onClick={handleBackToHome} sx={{ mb: 2 }}>
-                  Retour à l'accueil
+                  Retour a l'accueil
                 </Button>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
                   {currentProject.name}
@@ -131,7 +164,7 @@ function App() {
                 variant="outlined"
                 onClick={() => handleEditProject(currentProject)}
               >
-                Éditer le projet
+                Editer le projet
               </Button>
             </Box>
 
@@ -143,9 +176,17 @@ function App() {
 
             {loading && <LinearProgress sx={{ mb: 2 }} />}
 
+            {/* Liste des offres d'emploi */}
+            <JobOfferList
+              projectId={currentProject.id}
+              onAddClick={handleAddJobOffer}
+              onOfferSelect={(offer) => console.log('Offre selectionnee:', offer)}
+            />
+
             {/* Formulaire d'analyse */}
             <CVAnalyzerForm
               project={currentProject}
+              jobOffers={jobOffers}
               onAnalysisComplete={handleAnalysisComplete}
               onAnalysisStart={handleAnalysisStart}
             />
@@ -176,6 +217,24 @@ function App() {
               project={currentProject}
               onBack={handleBackToAnalyzer}
               onSave={handleProjectSave}
+            />
+          </Container>
+        </Box>
+      )}
+
+      {screen === 'jobofferupload' && currentProject && (
+        <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
+          <Container maxWidth="lg">
+            <Button startIcon={<BackIcon />} onClick={handleBackToAnalyzer} sx={{ mb: 2 }}>
+              Retour
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+              {currentProject.name} - Importer une offre
+            </Typography>
+            <JobOfferUpload
+              projectId={currentProject.id}
+              onUploadComplete={handleJobOfferUploadComplete}
+              onBack={handleBackToAnalyzer}
             />
           </Container>
         </Box>

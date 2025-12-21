@@ -216,11 +216,29 @@ app.on('quit', () => {
   stopBackend();
 });
 
-// IPC : Ouvrir le dialog de sélection de dossier
+// IPC : Ouvrir le dialog de selection de dossier
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: 'Sélectionner le dossier contenant les CVs'
+    title: 'Selectionner le dossier contenant les CVs'
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0];
+});
+
+// IPC : Ouvrir le dialog de selection de fichier
+ipcMain.handle('select-file', async (event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    title: 'Selectionner un fichier',
+    filters: options?.filters || [
+      { name: 'Documents', extensions: ['pdf', 'txt'] },
+      { name: 'Tous les fichiers', extensions: ['*'] }
+    ]
   });
 
   if (result.canceled) {
