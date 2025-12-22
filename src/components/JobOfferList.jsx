@@ -23,10 +23,11 @@ import {
 import WorkIcon from '@mui/icons-material/Work';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { apiUrl } from '../config';
 
-const JobOfferList = ({ projectId, onAddClick, onOfferSelect, selectedOfferId }) => {
+const JobOfferList = ({ projectId, onAddClick, onOfferSelect, onEditClick, selectedOfferId }) => {
   const [jobOffers, setJobOffers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -184,6 +185,18 @@ const JobOfferList = ({ projectId, onAddClick, onOfferSelect, selectedOfferId })
                   }
                 />
                 <ListItemSecondaryAction>
+                  <Tooltip title="Modifier les ponderations">
+                    <IconButton
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditClick && onEditClick(offer);
+                      }}
+                      sx={{ mr: 1 }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Supprimer cette offre">
                     <IconButton
                       edge="end"

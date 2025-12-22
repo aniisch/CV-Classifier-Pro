@@ -2,6 +2,9 @@ const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
+// Chemin de l'icone
+const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+
 // Garde une référence globale
 let mainWindow;
 let backendProcess;
@@ -124,6 +127,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

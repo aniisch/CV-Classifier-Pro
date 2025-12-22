@@ -17,16 +17,18 @@ import AnalysisReport from './AnalysisReport';
 import AnalysisHistory from './AnalysisHistory';
 import JobOfferUpload from './JobOfferUpload';
 import JobOfferList from './JobOfferList';
+import JobOfferEdit from './JobOfferEdit';
 import { apiUrl } from '../config';
 
 function App() {
-  const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor', 'jobofferupload'
+  const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor', 'jobofferupload', 'jobofferedit'
   const [currentProject, setCurrentProject] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [jobOffers, setJobOffers] = useState([]);
+  const [editingJobOffer, setEditingJobOffer] = useState(null);
 
   // Charger les offres d'emploi quand on entre dans l'analyzer
   useEffect(() => {
@@ -141,6 +143,17 @@ function App() {
     setScreen('analyzer');
   };
 
+  const handleEditJobOffer = (offer) => {
+    setEditingJobOffer(offer);
+    setScreen('jobofferedit');
+  };
+
+  const handleJobOfferSave = (updatedOffer) => {
+    setJobOffers(prev => prev.map(o => o.id === updatedOffer.id ? updatedOffer : o));
+    setScreen('analyzer');
+    setEditingJobOffer(null);
+  };
+
   return (
     <>
       {screen === 'home' && (
@@ -180,6 +193,7 @@ function App() {
             <JobOfferList
               projectId={currentProject.id}
               onAddClick={handleAddJobOffer}
+              onEditClick={handleEditJobOffer}
               onOfferSelect={(offer) => console.log('Offre selectionnee:', offer)}
             />
 
@@ -234,6 +248,24 @@ function App() {
             <JobOfferUpload
               projectId={currentProject.id}
               onUploadComplete={handleJobOfferUploadComplete}
+              onBack={handleBackToAnalyzer}
+            />
+          </Container>
+        </Box>
+      )}
+
+      {screen === 'jobofferedit' && currentProject && editingJobOffer && (
+        <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
+          <Container maxWidth="lg">
+            <Button startIcon={<BackIcon />} onClick={handleBackToAnalyzer} sx={{ mb: 2 }}>
+              Retour
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+              {currentProject.name} - Modifier l'offre
+            </Typography>
+            <JobOfferEdit
+              jobOffer={editingJobOffer}
+              onSave={handleJobOfferSave}
               onBack={handleBackToAnalyzer}
             />
           </Container>

@@ -39,13 +39,6 @@ Apres avoir cree un projet, configurez les competences recherchees :
 4. Selectionnez le mode **"Mots-cles du projet"**
 5. Lancez l'analyse
 
-### Mode Offre d'Emploi
-
-1. Importez d'abord une offre d'emploi (PDF ou TXT)
-2. Les competences sont extraites automatiquement
-3. Modifiez les ponderations si necessaire
-4. Lancez l'analyse avec l'offre selectionnee
-
 ---
 
 ## 4. Comprendre les Resultats
@@ -78,13 +71,27 @@ Toutes vos analyses sont sauvegardees :
 
 ---
 
-## 6. Importer une Offre d'Emploi
+## 6. Importer une Offre d'Emploi (alternative au Configurer les Mots-cles)
 
-1. Cliquez sur **"Importer Offre"** dans votre projet
+1. Cliquez sur **"Importer"** dans la section "Offres d'Emploi"
 2. Selectionnez un fichier PDF ou TXT
 3. Les competences techniques sont detectees automatiquement
-4. Ajustez les ponderations selon l'importance
+4. La ponderation est calculee selon la frequence d'apparition
 5. Utilisez cette offre pour analyser les CVs
+
+---
+
+## 7. Modifier les Ponderations d'une Offre
+
+Apres avoir importe une offre, vous pouvez ajuster les ponderations :
+
+1. Dans la liste des offres, cliquez sur l'icone **crayon** (a cote de la poubelle)
+2. Modifiez les pourcentages de chaque competence
+3. Supprimez les competences non pertinentes avec l'icone **poubelle**
+4. Assurez-vous que le total fait **100%**
+5. Cliquez sur **"Sauvegarder"**
+
+> **Note** : Les competences les plus mentionnees dans l'offre ont automatiquement un poids plus eleve.
 
 ---
 

@@ -148,18 +148,40 @@ const UserManual = ({ open, onClose }) => {
           5. Importer une Offre d'Emploi
         </Typography>
         <Box component="ol" sx={{ pl: 2 }}>
-          <li>Cliquez sur <strong>"Importer Offre"</strong> dans votre projet</li>
+          <li>Cliquez sur <strong>"Importer"</strong> dans la section "Offres d'Emploi"</li>
           <li>Selectionnez un fichier PDF ou TXT</li>
           <li>Les competences techniques sont detectees automatiquement</li>
-          <li>Ajustez les ponderations selon l'importance</li>
+          <li>La ponderation est calculee selon la frequence d'apparition</li>
           <li>Utilisez cette offre pour analyser les CVs</li>
         </Box>
 
         <Divider sx={{ my: 2 }} />
 
-        {/* Section 6: Historique */}
+        {/* Section 6: Modifier les Ponderations */}
         <Typography variant="h6" color="primary" gutterBottom>
-          6. Historique
+          6. Modifier les Ponderations d'une Offre
+        </Typography>
+        <Typography paragraph>
+          Apres avoir importe une offre, vous pouvez ajuster les ponderations :
+        </Typography>
+        <Box component="ol" sx={{ pl: 2 }}>
+          <li>Dans la liste des offres, cliquez sur l'icone <strong>crayon</strong> (a cote de la poubelle)</li>
+          <li>Modifiez les pourcentages de chaque competence</li>
+          <li>Supprimez les competences non pertinentes avec l'icone <strong>poubelle</strong></li>
+          <li>Assurez-vous que le total fait <strong>100%</strong></li>
+          <li>Cliquez sur <strong>"Sauvegarder"</strong></li>
+        </Box>
+        <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: 'info.light', color: 'info.contrastText' }}>
+          <Typography variant="body2">
+            <strong>Note :</strong> Les competences les plus mentionnees dans l'offre ont automatiquement un poids plus eleve.
+          </Typography>
+        </Paper>
+
+        <Divider sx={{ my: 2 }} />
+
+        {/* Section 7: Historique */}
+        <Typography variant="h6" color="primary" gutterBottom>
+          7. Historique
         </Typography>
         <Typography paragraph>
           Toutes vos analyses sont sauvegardees. Allez dans <strong>"Historique"</strong> pour
