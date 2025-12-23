@@ -525,19 +525,53 @@ async def test_llm_connection(db: Session = Depends(get_db)):
         elif settings.provider == "openai":
             if not settings.api_key:
                 return {"status": "error", "message": "Cle API OpenAI manquante"}
-            # Test simple - on verifie juste que la cle a le bon format
-            if settings.api_key.startswith("sk-"):
-                return {"status": "ok", "provider": "openai", "message": "Cle API configuree"}
-            else:
-                return {"status": "error", "message": "Format de cle API invalide"}
+            # Test reel avec l'API OpenAI
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(
+                        "https://api.openai.com/v1/models",
+                        headers={"Authorization": f"Bearer {settings.api_key}"}
+                    )
+                    if response.status_code == 200:
+                        return {"status": "ok", "provider": "openai", "message": "Connexion reussie"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Cle API invalide ou expiree"}
+                    else:
+                        return {"status": "error", "message": f"Erreur API: {response.status_code}"}
+            except Exception as e:
+                return {"status": "error", "message": f"Erreur de connexion: {str(e)}"}
 
         elif settings.provider == "anthropic":
             if not settings.api_key:
                 return {"status": "error", "message": "Cle API Anthropic manquante"}
-            if settings.api_key.startswith("sk-ant-"):
-                return {"status": "ok", "provider": "anthropic", "message": "Cle API configuree"}
-            else:
-                return {"status": "error", "message": "Format de cle API invalide"}
+            # Test reel avec l'API Anthropic
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": settings.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": settings.model,
+                            "max_tokens": 10,
+                            "messages": [{"role": "user", "content": "test"}]
+                        }
+                    )
+                    if response.status_code == 200:
+                        return {"status": "ok", "provider": "anthropic", "message": "Connexion reussie"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Cle API invalide ou expiree"}
+                    else:
+                        error_data = response.json()
+                        error_msg = error_data.get("error", {}).get("message", f"Erreur {response.status_code}")
+                        return {"status": "error", "message": error_msg}
+            except Exception as e:
+                return {"status": "error", "message": f"Erreur de connexion: {str(e)}"}
 
         else:
             return {"status": "error", "message": f"Provider inconnu: {settings.provider}"}
@@ -549,3 +583,141 @@ async def test_llm_connection(db: Session = Depends(get_db)):
         print(f"ERROR in test_llm_connection: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== LLM ANALYSIS ENDPOINT =====
+
+class LLMAnalysisRequest(BaseModel):
+    folder_path: str
+    job_offer_id: str
+
+
+@app.post("/api/projects/{project_id}/analyze-llm")
+async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Session = Depends(get_db)):
+    """
+    Analyse les CVs avec un LLM par rapport a une offre d'emploi.
+    Retourne une analyse detaillee pour chaque CV.
+    """
+    try:
+        # 1. Verifier que le projet existe
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouve")
+
+        # 2. Verifier que l'offre existe
+        job_offer = JobOfferManager.get_job_offer(db, request.job_offer_id)
+        if not job_offer:
+            raise HTTPException(status_code=404, detail="Offre d'emploi non trouvee")
+
+        # 3. Verifier le dossier CVs
+        folder_path = request.folder_path
+        if not os.path.exists(folder_path):
+            raise HTTPException(status_code=400, detail=f"Dossier non trouve: {folder_path}")
+
+        # 4. Charger les settings LLM
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            raise HTTPException(status_code=400, detail="LLM non configure. Allez dans les parametres.")
+
+        # 5. Lire les CVs du dossier
+        from PyPDF2 import PdfReader
+        cvs = []
+        for filename in os.listdir(folder_path):
+            if filename.lower().endswith('.pdf'):
+                filepath = os.path.join(folder_path, filename)
+                try:
+                    reader = PdfReader(filepath)
+                    text = ""
+                    for page in reader.pages:
+                        text += page.extract_text() or ""
+                    if text.strip():
+                        cvs.append({"filename": filename, "content": text})
+                except Exception as e:
+                    print(f"Erreur lecture {filename}: {e}")
+
+        if not cvs:
+            raise HTTPException(status_code=400, detail="Aucun CV valide trouve dans le dossier")
+
+        # 6. Creer le LLM Manager et analyser
+        from .llm_manager import LLMManager
+        llm_manager = LLMManager(db)
+
+        results = []
+        for cv in cvs:
+            try:
+                response = await llm_manager.analyze_cv(
+                    cv_content=cv["content"],
+                    job_offer_content=job_offer.raw_content
+                )
+                results.append({
+                    "filename": cv["filename"],
+                    "success": True,
+                    "analysis": response.content,
+                    "model": response.model,
+                    "provider": response.provider,
+                    "tokens": response.usage
+                })
+            except Exception as e:
+                results.append({
+                    "filename": cv["filename"],
+                    "success": False,
+                    "error": str(e)
+                })
+
+        # 7. Generer le rapport Markdown
+        report = generate_llm_report(results, job_offer.filename, settings.provider, settings.model)
+
+        # 8. Sauvegarder l'analyse
+        analysis = Analysis(
+            project_id=project_id,
+            job_offer_id=request.job_offer_id,
+            date=datetime.now(),
+            report=report,
+            keywords={"mode": "llm", "provider": settings.provider, "model": settings.model},
+            folder_path=folder_path,
+            results=results
+        )
+        db.add(analysis)
+        db.commit()
+
+        return {"report": report, "results": results}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in analyze_with_llm: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def generate_llm_report(results: list, job_offer_name: str, provider: str, model: str) -> str:
+    """Genere un rapport Markdown a partir des resultats LLM."""
+    report = f"""# Rapport d'Analyse IA
+
+## Informations
+- **Offre d'emploi**: {job_offer_name}
+- **Provider**: {provider}
+- **Modele**: {model}
+- **CVs analyses**: {len(results)}
+- **Date**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+---
+
+"""
+    successful = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+
+    if successful:
+        report += f"## Analyses ({len(successful)} CVs)\n\n"
+        for i, result in enumerate(successful, 1):
+            report += f"### {i}. {result['filename']}\n\n"
+            report += result.get("analysis", "Pas d'analyse disponible")
+            report += "\n\n---\n\n"
+
+    if failed:
+        report += f"## Erreurs ({len(failed)} CVs)\n\n"
+        for result in failed:
+            report += f"- **{result['filename']}**: {result.get('error', 'Erreur inconnue')}\n"
+
+    return report
