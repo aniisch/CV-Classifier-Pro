@@ -17,13 +17,24 @@ import {
   InputLabel,
   Chip,
   Stack,
-  Divider
+  Divider,
+  Slider,
+  Checkbox,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Collapse
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import SendIcon from '@mui/icons-material/Send';
 import WorkIcon from '@mui/icons-material/Work';
 import KeyIcon from '@mui/icons-material/Key';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysisStart }) => {
   const [folderPath, setFolderPath] = useState('');
@@ -32,6 +43,15 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
   const [analysisMode, setAnalysisMode] = useState('keywords'); // 'keywords', 'joboffer' ou 'llm'
   const [selectedJobOfferId, setSelectedJobOfferId] = useState('');
   const [llmConfigured, setLlmConfigured] = useState(false);
+
+  // Etats pour la selection de CVs (mode LLM)
+  const [cvSelectionMode, setCvSelectionMode] = useState('all'); // 'all', 'topN', 'manual'
+  const [previousAnalyses, setPreviousAnalyses] = useState([]);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState('');
+  const [analysisResults, setAnalysisResults] = useState([]); // CVs de l'analyse selectionnee
+  const [topNCount, setTopNCount] = useState(3);
+  const [selectedCvs, setSelectedCvs] = useState([]); // Pour selection manuelle
+  const [showCvList, setShowCvList] = useState(false);
 
   // Verifier si LLM est configure
   useEffect(() => {
@@ -54,6 +74,77 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
     console.log('CVAnalyzerForm - project:', project?.name);
     console.log('CVAnalyzerForm - jobOffers:', jobOffers?.length);
   }, [project, jobOffers]);
+
+  // Charger les analyses precedentes du projet
+  useEffect(() => {
+    const loadPreviousAnalyses = async () => {
+      if (!project?.id) return;
+      try {
+        const response = await fetch(apiUrl(`/api/projects/${project.id}/analyses`));
+        if (response.ok) {
+          const data = await response.json();
+          // Filtrer pour garder uniquement les analyses non-LLM (mots-cles ou offre)
+          const nonLlmAnalyses = data.filter(a => {
+            const kw = a.keywords || {};
+            return kw.mode !== 'llm';
+          });
+          setPreviousAnalyses(nonLlmAnalyses);
+        }
+      } catch (err) {
+        console.error('Erreur chargement analyses:', err);
+      }
+    };
+    loadPreviousAnalyses();
+  }, [project?.id]);
+
+  // Parser les resultats quand une analyse est selectionnee
+  useEffect(() => {
+    if (!selectedAnalysisId) {
+      setAnalysisResults([]);
+      setSelectedCvs([]);
+      return;
+    }
+
+    const analysis = previousAnalyses.find(a => a.id === parseInt(selectedAnalysisId));
+    if (!analysis) return;
+
+    // Extraire les CVs du rapport markdown
+    // Le format est: | 1 | filename.pdf | XX% | ...
+    const report = analysis.report || '';
+    const cvRegex = /\|\s*\d+\s*\|\s*([^|]+\.pdf)\s*\|\s*([\d.]+)%?\s*\|/gi;
+    const cvs = [];
+    let match;
+
+    while ((match = cvRegex.exec(report)) !== null) {
+      cvs.push({
+        filename: match[1].trim(),
+        score: parseFloat(match[2])
+      });
+    }
+
+    // Trier par score decroissant
+    cvs.sort((a, b) => b.score - a.score);
+    setAnalysisResults(cvs);
+
+    // Pre-selectionner le top N
+    if (cvSelectionMode === 'topN') {
+      setSelectedCvs(cvs.slice(0, topNCount).map(c => c.filename));
+    } else if (cvSelectionMode === 'manual') {
+      setSelectedCvs([]);
+    }
+
+    // Mettre a jour le folder_path depuis l'analyse
+    if (analysis.folder_path && !folderPath) {
+      setFolderPath(analysis.folder_path);
+    }
+  }, [selectedAnalysisId, previousAnalyses, cvSelectionMode, topNCount]);
+
+  // Mettre a jour la selection quand topN change
+  useEffect(() => {
+    if (cvSelectionMode === 'topN' && analysisResults.length > 0) {
+      setSelectedCvs(analysisResults.slice(0, topNCount).map(c => c.filename));
+    }
+  }, [topNCount, cvSelectionMode, analysisResults]);
 
   if (!project) {
     return null;
@@ -104,7 +195,15 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
         body = { folder_path: folderPath };
       } else if (analysisMode === 'llm') {
         url = apiUrl(`/api/projects/${project.id}/analyze-llm`);
-        body = { folder_path: folderPath, job_offer_id: selectedJobOfferId };
+        body = {
+          folder_path: folderPath,
+          job_offer_id: selectedJobOfferId,
+          // Ajouter cv_files si mode selection (pas 'all')
+          ...(cvSelectionMode !== 'all' && selectedCvs.length > 0 && {
+            cv_files: selectedCvs,
+            source_analysis_id: selectedAnalysisId ? parseInt(selectedAnalysisId) : null
+          })
+        };
       }
 
       const response = await fetch(url, {
@@ -301,11 +400,153 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
           </Box>
         )}
 
+        {/* Selection des CVs pour mode LLM */}
+        {analysisMode === 'llm' && selectedJobOfferId && (
+          <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FilterListIcon fontSize="small" />
+              Source des CVs
+            </Typography>
+
+            <RadioGroup
+              value={cvSelectionMode}
+              onChange={(e) => {
+                setCvSelectionMode(e.target.value);
+                if (e.target.value === 'all') {
+                  setSelectedCvs([]);
+                  setSelectedAnalysisId('');
+                }
+              }}
+              sx={{ mb: 1 }}
+            >
+              <FormControlLabel
+                value="all"
+                control={<Radio size="small" />}
+                label="Tous les CVs du dossier"
+              />
+              <FormControlLabel
+                value="topN"
+                control={<Radio size="small" />}
+                label="Top N d'une analyse précédente"
+                disabled={previousAnalyses.length === 0}
+              />
+              <FormControlLabel
+                value="manual"
+                control={<Radio size="small" />}
+                label="Sélection manuelle"
+                disabled={previousAnalyses.length === 0}
+              />
+            </RadioGroup>
+
+            {/* Selection de l'analyse precedente */}
+            {(cvSelectionMode === 'topN' || cvSelectionMode === 'manual') && (
+              <Box sx={{ ml: 3 }}>
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                  <InputLabel>Analyse source</InputLabel>
+                  <Select
+                    value={selectedAnalysisId}
+                    onChange={(e) => setSelectedAnalysisId(e.target.value)}
+                    label="Analyse source"
+                  >
+                    {previousAnalyses.map((analysis) => (
+                      <MenuItem key={analysis.id} value={analysis.id}>
+                        {new Date(analysis.date).toLocaleDateString('fr-FR')} - {Object.keys(analysis.keywords || {}).length} critères
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {/* Slider pour Top N */}
+                {cvSelectionMode === 'topN' && selectedAnalysisId && analysisResults.length > 0 && (
+                  <Box sx={{ px: 1 }}>
+                    <Typography variant="body2" gutterBottom>
+                      Nombre de CVs: <strong>{topNCount}</strong> sur {analysisResults.length}
+                    </Typography>
+                    <Slider
+                      value={topNCount}
+                      onChange={(e, val) => setTopNCount(val)}
+                      min={1}
+                      max={Math.min(10, analysisResults.length)}
+                      marks
+                      valueLabelDisplay="auto"
+                      size="small"
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      CVs sélectionnés: {selectedCvs.join(', ')}
+                    </Typography>
+                  </Box>
+                )}
+
+                {/* Liste avec checkboxes pour selection manuelle */}
+                {cvSelectionMode === 'manual' && selectedAnalysisId && analysisResults.length > 0 && (
+                  <Box>
+                    <Button
+                      size="small"
+                      onClick={() => setShowCvList(!showCvList)}
+                      endIcon={showCvList ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      sx={{ mb: 1 }}
+                    >
+                      {selectedCvs.length} CV(s) sélectionné(s)
+                    </Button>
+                    <Collapse in={showCvList}>
+                      <List dense sx={{ maxHeight: 200, overflow: 'auto', bgcolor: 'white', borderRadius: 1 }}>
+                        {analysisResults.map((cv) => (
+                          <ListItem key={cv.filename} disablePadding>
+                            <ListItemButton
+                              onClick={() => {
+                                setSelectedCvs(prev =>
+                                  prev.includes(cv.filename)
+                                    ? prev.filter(f => f !== cv.filename)
+                                    : [...prev, cv.filename]
+                                );
+                              }}
+                              dense
+                            >
+                              <ListItemIcon sx={{ minWidth: 36 }}>
+                                <Checkbox
+                                  edge="start"
+                                  checked={selectedCvs.includes(cv.filename)}
+                                  size="small"
+                                />
+                              </ListItemIcon>
+                              <ListItemText
+                                primary={cv.filename}
+                                secondary={`Score: ${cv.score.toFixed(1)}%`}
+                              />
+                            </ListItemButton>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Collapse>
+                  </Box>
+                )}
+
+                {/* Message si pas d'analyse selectionnee */}
+                {!selectedAnalysisId && (
+                  <Typography variant="caption" color="text.secondary">
+                    Sélectionnez une analyse précédente pour voir les CVs disponibles
+                  </Typography>
+                )}
+              </Box>
+            )}
+
+            {/* Message si pas d'analyses precedentes */}
+            {previousAnalyses.length === 0 && cvSelectionMode !== 'all' && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Aucune analyse précédente. Lancez d'abord une analyse par mots-clés ou offre.
+              </Alert>
+            )}
+          </Box>
+        )}
+
         {/* Info mode LLM */}
         {analysisMode === 'llm' && selectedJobOfferId && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            L'IA va analyser chaque CV en detail par rapport a l'offre d'emploi.
-            Cette analyse peut prendre quelques minutes selon le nombre de CVs.
+            {cvSelectionMode === 'all'
+              ? "L'IA va analyser tous les CVs du dossier."
+              : `L'IA va analyser ${selectedCvs.length} CV(s) sélectionné(s).`
+            }
+            {' '}Cette analyse peut prendre quelques minutes.
           </Alert>
         )}
 
@@ -326,7 +567,11 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
             loading ||
             (analysisMode === 'keywords' && !hasCurrentKeywords) ||
             (analysisMode === 'joboffer' && !selectedJobOfferId) ||
-            (analysisMode === 'llm' && (!selectedJobOfferId || !llmConfigured))
+            (analysisMode === 'llm' && (
+              !selectedJobOfferId ||
+              !llmConfigured ||
+              (cvSelectionMode !== 'all' && selectedCvs.length === 0)
+            ))
           }
         >
           {loading

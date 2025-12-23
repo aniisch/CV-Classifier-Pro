@@ -22,8 +22,9 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Tro
 - Support multi-provider : Ollama (local), OpenAI, Anthropic
 - Exécution locale avec Ollama (gratuit, données privées)
 - Analyse intelligente CV vs Offre par l'IA
+- **Rapport avec classement** : tableau de ranking, top 3, synthèse
 - Score de correspondance, points forts/faibles, recommandation
-- Rapport détaillé généré par l'IA
+- **Sélection de CVs** : tous, top N, ou sélection manuelle
 
 ### Général
 - Base de données locale SQLite
@@ -218,8 +219,13 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Endpoint analyse IA
 - [x] Intégration dans CVAnalyzerForm
 
+### Phase 3.1 - Améliorations LLM (Terminé)
+- [x] Rapport avec classement et synthèse
+- [x] Top 3 profils avec résumé
+- [x] Sélection de CVs (tous / Top N / manuel)
+- [x] Parsing automatique scores et recommandations
+
 ### Optimisations futures
-- [ ] Sélection de CVs (top N, manuel, ou tous)
 - [ ] Queue/Worker pour gros batches
 - [ ] Tests unitaires
 - [ ] CI/CD pipeline

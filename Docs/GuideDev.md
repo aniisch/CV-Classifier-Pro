@@ -346,9 +346,15 @@ Analyse intelligente CV vs Offre d'emploi avec un LLM (IA).
 - Support modèles locaux (Ollama) et cloud
 - Rapport d'analyse détaillé par l'IA
 
+### v3.1.0 - Améliorations LLM
+- Rapport avec classement et synthèse (tableau de ranking)
+- Top 3 profils avec résumé
+- Sélection de CVs (tous / Top N / manuel)
+- Parsing automatique des scores et recommandations
+
 ---
 
-## Phase 3.1 - Améliorations LLM
+## Phase 3.1 - Améliorations LLM ✅
 
 ### Objectif
 Améliorer l'expérience d'analyse IA avec sélection de CVs et rapport enrichi.
@@ -388,11 +394,11 @@ Améliorer l'expérience d'analyse IA avec sélection de CVs et rapport enrichi.
 ...
 ```
 
-### 3.1.2 - Sélection de CVs
+### 3.1.2 - Sélection de CVs ✅
 | Fichier | Status | Description |
 |---------|--------|-------------|
-| `src/components/CVAnalyzerForm.jsx` | ⬜ À faire | Mode sélection (All/TopN/Manual) |
-| `src/services/api.py` | ⬜ À faire | Paramètre cv_files optionnel |
+| `src/components/CVAnalyzerForm.jsx` | ✅ Modifié | Mode sélection (All/TopN/Manual) |
+| `src/services/api.py` | ✅ Modifié | Paramètre cv_files optionnel |
 
 **Modes de sélection:**
 - **Tous les CVs** - Comportement actuel (dossier complet)

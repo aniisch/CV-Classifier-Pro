@@ -591,6 +591,8 @@ async def test_llm_connection(db: Session = Depends(get_db)):
 class LLMAnalysisRequest(BaseModel):
     folder_path: str
     job_offer_id: str
+    cv_files: Optional[List[str]] = None  # Liste optionnelle de fichiers specifiques
+    source_analysis_id: Optional[int] = None  # ID de l'analyse source (pour traçabilité)
 
 
 @app.post("/api/projects/{project_id}/analyze-llm")
@@ -620,12 +622,24 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         if not settings:
             raise HTTPException(status_code=400, detail="LLM non configure. Allez dans les parametres.")
 
-        # 5. Lire les CVs du dossier
+        # 5. Lire les CVs (soit tous, soit selection specifique)
         from PyPDF2 import PdfReader
         cvs = []
-        for filename in os.listdir(folder_path):
+
+        # Determiner la liste des fichiers a analyser
+        if request.cv_files and len(request.cv_files) > 0:
+            # Mode selection: utiliser uniquement les fichiers specifies
+            files_to_analyze = request.cv_files
+        else:
+            # Mode tous: scanner tout le dossier
+            files_to_analyze = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
+
+        for filename in files_to_analyze:
             if filename.lower().endswith('.pdf'):
                 filepath = os.path.join(folder_path, filename)
+                if not os.path.exists(filepath):
+                    print(f"Fichier non trouve: {filepath}")
+                    continue
                 try:
                     reader = PdfReader(filepath)
                     text = ""
