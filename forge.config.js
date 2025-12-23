@@ -35,7 +35,10 @@ module.exports = {
         authors: 'CV Classifier Pro Team',
         description: 'Application desktop pour analyser et classifier des CVs',
         iconUrl: 'file://' + path.join(__dirname, 'assets', 'icon.ico'),
-        setupIcon: path.join(__dirname, 'assets', 'icon.ico')
+        setupIcon: path.join(__dirname, 'assets', 'icon.ico'),
+        loadingGif: path.join(__dirname, 'assets', 'loading.gif'),
+        // Pas de MSI
+        noMsi: true
       }
     },
     // macOS et Linux - Crée un .zip

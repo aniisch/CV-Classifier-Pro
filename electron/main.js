@@ -17,6 +17,15 @@ if (process.platform === 'win32') {
   }
 }
 
+// ========================================
+// OPTIMISATIONS DEMARRAGE
+// ========================================
+// Désactiver l'accélération hardware pour éviter les flashs GPU
+app.disableHardwareAcceleration();
+// Empêcher les fenêtres de clignoter
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
 // Chemin de l'icone
 const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 
@@ -72,34 +81,42 @@ function checkBackendReady() {
 }
 
 function createSplashWindow() {
-  log('Creation du splash screen...');
+  return new Promise((resolve) => {
+    log('Creation du splash screen...');
 
-  splashWindow = new BrowserWindow({
-    width: 400,
-    height: 500,
-    frame: false,
-    transparent: false,
-    alwaysOnTop: true,
-    resizable: false,
-    skipTaskbar: true, // Ne pas afficher dans la barre des taches
-    icon: iconPath,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
-    }
+    splashWindow = new BrowserWindow({
+      width: 400,
+      height: 500,
+      frame: false,
+      transparent: false,
+      alwaysOnTop: true,
+      resizable: false,
+      skipTaskbar: true,
+      show: false, // NE PAS AFFICHER tant que pas prêt
+      icon: iconPath,
+      backgroundColor: '#1976d2', // Couleur du splash pour éviter flash
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    const splashPath = path.join(__dirname, 'splash.html');
+
+    // Afficher SEULEMENT quand le contenu est prêt
+    splashWindow.once('ready-to-show', () => {
+      log('Splash pret, affichage...');
+      splashWindow.show();
+      splashWindow.center();
+      resolve();
+    });
+
+    splashWindow.on('closed', () => {
+      splashWindow = null;
+    });
+
+    splashWindow.loadFile(splashPath);
   });
-
-  const splashPath = path.join(__dirname, 'splash.html');
-  splashWindow.loadFile(splashPath);
-
-  // Centrer le splash
-  splashWindow.center();
-
-  splashWindow.on('closed', () => {
-    splashWindow = null;
-  });
-
-  log('Splash screen affiche');
 }
 
 function startBackend() {
@@ -253,8 +270,9 @@ function createMainWindow() {
 // Demarrage de l'app
 app.whenReady().then(async () => {
   try {
-    // 1. Afficher le splash immediatement
-    createSplashWindow();
+    // 1. Creer et attendre que le splash soit prêt avant de l'afficher
+    await createSplashWindow();
+    log('Splash affiche');
 
     // 2. Lancer le backend (sans attendre qu'il soit pret)
     startBackend();
