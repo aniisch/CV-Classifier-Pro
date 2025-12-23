@@ -9,7 +9,6 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -17,19 +16,26 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  Tooltip
+  Tooltip,
+  InputAdornment
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 const JobOfferUpload = ({ projectId, onUploadComplete, onBack }) => {
   const [filePath, setFilePath] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadedOffer, setUploadedOffer] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedRequirements, setEditedRequirements] = useState({});
 
   const handleBrowse = async () => {
     // En mode Electron, utiliser le dialog natif
@@ -73,6 +79,7 @@ const JobOfferUpload = ({ projectId, onUploadComplete, onBack }) => {
 
       const data = await response.json();
       setUploadedOffer(data);
+      setEditedRequirements(data.requirements || {});
       setSuccess(`Offre "${data.filename}" uploadee avec succes! ${Object.keys(data.requirements).length} requirements detectes.`);
 
       if (onUploadComplete) {
@@ -85,10 +92,79 @@ const JobOfferUpload = ({ projectId, onUploadComplete, onBack }) => {
     }
   };
 
-  const getTotalWeight = () => {
-    if (!uploadedOffer?.requirements) return 0;
-    return Object.values(uploadedOffer.requirements).reduce((sum, w) => sum + w, 0);
+  const handleStartEdit = () => {
+    setEditedRequirements({ ...uploadedOffer.requirements });
+    setIsEditing(true);
+    setError('');
   };
+
+  const handleCancelEdit = () => {
+    setEditedRequirements({ ...uploadedOffer.requirements });
+    setIsEditing(false);
+  };
+
+  const handleWeightChange = (keyword, value) => {
+    const numValue = parseFloat(value) || 0;
+    setEditedRequirements(prev => ({
+      ...prev,
+      [keyword]: Math.max(0, Math.min(100, numValue))
+    }));
+  };
+
+  const handleDeleteKeyword = (keyword) => {
+    setEditedRequirements(prev => {
+      const newReqs = { ...prev };
+      delete newReqs[keyword];
+      return newReqs;
+    });
+  };
+
+  const handleSaveRequirements = async () => {
+    // Verifier que le total fait 100%
+    const total = Object.values(editedRequirements).reduce((sum, w) => sum + w, 0);
+    if (Math.abs(total - 100) > 0.5) {
+      setError(`Le total des ponderations doit faire 100% (actuellement ${total.toFixed(1)}%)`);
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const response = await fetch(apiUrl(`/api/job-offers/${uploadedOffer.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirements: editedRequirements })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erreur lors de la sauvegarde');
+      }
+
+      const data = await response.json();
+      setUploadedOffer(data);
+      setIsEditing(false);
+      setSuccess('Ponderations mises a jour avec succes!');
+
+      if (onUploadComplete) {
+        onUploadComplete(data);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getTotalWeight = (requirements) => {
+    if (!requirements) return 0;
+    return Object.values(requirements).reduce((sum, w) => sum + w, 0);
+  };
+
+  const currentRequirements = isEditing ? editedRequirements : (uploadedOffer?.requirements || {});
+  const totalWeight = getTotalWeight(currentRequirements);
+  const isTotalValid = Math.abs(totalWeight - 100) <= 0.5;
 
   return (
     <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
@@ -143,42 +219,113 @@ const JobOfferUpload = ({ projectId, onUploadComplete, onBack }) => {
           {loading ? 'Analyse en cours...' : 'Uploader et Analyser'}
         </Button>
 
-        {uploadedOffer && uploadedOffer.requirements && Object.keys(uploadedOffer.requirements).length > 0 && (
+        {uploadedOffer && Object.keys(currentRequirements).length > 0 && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
-              Requirements detectes ({Object.keys(uploadedOffer.requirements).length})
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Requirements detectes ({Object.keys(currentRequirements).length})
+              </Typography>
+
+              {!isEditing ? (
+                <Tooltip title="Modifier les ponderations">
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={handleStartEdit}
+                  >
+                    Modifier
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<CancelIcon />}
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+                    onClick={handleSaveRequirements}
+                    disabled={saving || !isTotalValid}
+                  >
+                    Sauvegarder
+                  </Button>
+                </Box>
+              )}
+            </Box>
 
             <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Competence</TableCell>
-                    <TableCell align="right">Ponderation</TableCell>
+                    <TableCell align="right" sx={{ width: 150 }}>Ponderation</TableCell>
+                    {isEditing && <TableCell align="center" sx={{ width: 60 }}>Action</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {Object.entries(uploadedOffer.requirements)
+                  {Object.entries(currentRequirements)
                     .sort((a, b) => b[1] - a[1])
                     .map(([keyword, weight]) => (
                       <TableRow key={keyword}>
                         <TableCell>
                           <Chip label={keyword} size="small" color="primary" variant="outlined" />
                         </TableCell>
-                        <TableCell align="right">{weight}%</TableCell>
+                        <TableCell align="right">
+                          {isEditing ? (
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={weight}
+                              onChange={(e) => handleWeightChange(keyword, e.target.value)}
+                              InputProps={{
+                                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                                inputProps: { min: 0, max: 100, step: 0.1 }
+                              }}
+                              sx={{ width: 100 }}
+                            />
+                          ) : (
+                            `${weight}%`
+                          )}
+                        </TableCell>
+                        {isEditing && (
+                          <TableCell align="center">
+                            <Tooltip title="Supprimer">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteKeyword(keyword)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            <Typography variant="body2" color="text.secondary">
-              Total: {getTotalWeight().toFixed(1)}%
+            <Typography
+              variant="body2"
+              color={isTotalValid ? 'text.secondary' : 'error'}
+              sx={{ fontWeight: isTotalValid ? 'normal' : 'bold' }}
+            >
+              Total: {totalWeight.toFixed(1)}%
+              {!isTotalValid && isEditing && ' (doit faire 100%)'}
             </Typography>
           </Box>
         )}
 
-        {uploadedOffer && (!uploadedOffer.requirements || Object.keys(uploadedOffer.requirements).length === 0) && (
+        {uploadedOffer && Object.keys(currentRequirements).length === 0 && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             Aucun requirement technique detecte dans ce fichier. Verifiez le contenu du document.
           </Alert>

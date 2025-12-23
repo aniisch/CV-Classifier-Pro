@@ -19,8 +19,9 @@ import {
   Tooltip,
   Paper
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, HelpOutline as HelpIcon } from '@mui/icons-material';
 import { useProject } from '../hooks/useProject';
+import UserManual from './UserManual';
 
 function HomeScreen({ onProjectSelect }) {
   const { projects, currentProject, loading, error, createProject, deleteProject } = useProject();
@@ -29,6 +30,7 @@ function HomeScreen({ onProjectSelect }) {
   const [selectedProject, setSelectedProject] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   const handleOpenCreateDialog = () => {
     setDialogMode('create');
@@ -72,12 +74,29 @@ function HomeScreen({ onProjectSelect }) {
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(45deg, #f5f5f5 30%, #e3f2fd 90%)', py: 4 }}>
       <Container maxWidth="lg">
         {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: 4, position: 'relative' }}>
+          {/* Bouton Aide */}
+          <Tooltip title="Guide d'utilisation">
+            <IconButton
+              onClick={() => setShowManual(true)}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' }
+              }}
+            >
+              <HelpIcon />
+            </IconButton>
+          </Tooltip>
+
           <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', mb: 1 }}>
             CV Classifier Pro
           </Typography>
           <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
-            Gérez vos projets d'analyse de CV
+            Gerez vos projets d'analyse de CV
           </Typography>
         </Box>
 
@@ -219,7 +238,7 @@ function HomeScreen({ onProjectSelect }) {
           <DialogTitle>Supprimer le projet ?</DialogTitle>
           <DialogContent>
             <Typography>
-              Êtes-vous sûr de vouloir supprimer le projet <strong>{selectedProject?.name}</strong> ? Cette action est irréversible.
+              Etes-vous sur de vouloir supprimer le projet <strong>{selectedProject?.name}</strong> ? Cette action est irreversible.
             </Typography>
           </DialogContent>
           <DialogActions>
@@ -229,6 +248,9 @@ function HomeScreen({ onProjectSelect }) {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* User Manual Dialog */}
+        <UserManual open={showManual} onClose={() => setShowManual(false)} />
       </Container>
     </Box>
   );

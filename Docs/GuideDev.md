@@ -204,18 +204,69 @@ npm run make:linux  # Linux
 Les fichiers seront dans `out/make/`.
 
 
-## Phases futures
+## Historique des versions
 
-### Phase 2 - Offres d'Emploi
+### v1.0.0 - Phase 1 Complete
+- Gestion multi-projets
+- Analyse par mots-cles ponderes
+- Build Electron Windows
 
-| Tâche | Fichier | Description |
-|-------|---------|-------------|
-| Upload offre | `src/components/JobOfferUpload.jsx` | Interface upload PDF/TXT |
-| Parser | `src/services/job_offer_parser.py` | Extraction requirements |
-| Modèle | `src/database/models.py` | Table job_offers |
-| Analyse | `src/services/api.py` | Endpoint analyze-with-offer |
+### v2.0.0 - Phase 2 Complete
+- Upload offres d'emploi (PDF/TXT)
+- Extraction automatique des requirements techniques
+- Analyse CVs vs offre d'emploi
+- Deux modes: mots-cles manuels OU offre d'emploi
 
-### Phase 3 - Mode LLM
+---
+
+## Phase 2.1 - Optimisations (En cours)
+
+### 2.1.1 - Manuel d'utilisation
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/components/UserManual.jsx` | CREER | Composant modal avec le guide |
+| `src/components/HomeScreen.jsx` | MODIFIER | Bouton "?" pour ouvrir le manuel |
+| `src/assets/manual.md` | CREER | Contenu du manuel en Markdown |
+
+### 2.1.2 - Icone personnalisee
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `assets/icon.ico` | CREER | Icone Windows 256x256 |
+| `assets/icon.png` | CREER | Icone PNG pour autres OS |
+| `forge.config.js` | MODIFIER | Ajouter reference icone |
+| `electron/main.js` | MODIFIER | Icone fenetre |
+
+### 2.1.3 - Ponderation intelligente des offres
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/services/job_offer_parser.py` | MODIFIER | Ponderation basee sur frequence/position |
+| `src/components/JobOfferUpload.jsx` | MODIFIER | Ajouter edition des ponderations |
+
+Logique proposee:
+- Compter les occurrences de chaque keyword
+- Bonus si le mot apparait dans titre/premier paragraphe
+- Ponderation proportionnelle (pas equitable)
+- Permettre a l'utilisateur de modifier les ponderations apres extraction
+
+### 2.1.4 - Amelioration chargement Electron
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `electron/main.js` | MODIFIER | Attendre backend + frontend avant show |
+| `src/components/SplashScreen.jsx` | CREER | Ecran de chargement personnalise |
+| `assets/splash.png` | CREER | Image splash screen |
+
+Probleme actuel: La fenetre s'affiche, disparait, reapparait
+Solution: `show: false` au demarrage, puis `mainWindow.show()` quand tout est pret
+
+### 2.1.5 - Splash screen personnalise (optionnel)
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `electron/splash.html` | CREER | HTML du splash screen |
+| `electron/main.js` | MODIFIER | Afficher splash pendant chargement |
+
+---
+
+## Phase 3 - Mode LLM (Future)
 
 | Tâche | Fichier | Description |
 |-------|---------|-------------|
@@ -224,9 +275,11 @@ Les fichiers seront dans `out/make/`.
 | OpenAI | `src/utils/llm_adapters/openai_adapter.py` | Adapter |
 | Anthropic | `src/utils/llm_adapters/anthropic_adapter.py` | Adapter |
 | OLLAMA | `src/utils/llm_adapters/ollama_adapter.py` | Adapter local |
-| Guide | Intégré dans l'app | Setup OLLAMA |
+| Guide | Integre dans l'app | Setup OLLAMA |
 
-### Optimisations futures
+---
+
+## Optimisations futures
 
 - [ ] Queue/Worker pour gros batches
 - [ ] Tests unitaires

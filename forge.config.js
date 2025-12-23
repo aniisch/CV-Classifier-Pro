@@ -1,8 +1,12 @@
+const path = require('path');
+
 module.exports = {
   packagerConfig: {
     name: 'CV Classifier Pro',
     executableName: 'cv-classifier-pro',
     asar: true,
+    // Icone de l'application
+    icon: path.join(__dirname, 'assets', 'icon'),
     // Fichiers à ignorer lors du packaging
     ignore: [
       /^\/src/,
@@ -29,8 +33,12 @@ module.exports = {
       config: {
         name: 'CVClassifierPro',
         authors: 'CV Classifier Pro Team',
-        description: 'Application desktop pour analyser et classifier des CVs'
-        // Pas d'icône pour l'instant - utilisera l'icône par défaut
+        description: 'Application desktop pour analyser et classifier des CVs',
+        iconUrl: 'file://' + path.join(__dirname, 'assets', 'icon.ico'),
+        setupIcon: path.join(__dirname, 'assets', 'icon.ico'),
+        loadingGif: path.join(__dirname, 'assets', 'loading.gif'),
+        // Pas de MSI
+        noMsi: true
       }
     },
     // macOS et Linux - Crée un .zip

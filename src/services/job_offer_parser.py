@@ -119,9 +119,12 @@ class JobOfferParser:
             raise ValueError(f"Format de fichier non supporte: {extension}. Utilisez PDF ou TXT.")
 
     @staticmethod
-    def parse_requirements(text: str) -> Dict[str, int]:
+    def parse_requirements(text: str) -> Dict[str, float]:
         """
         Parse le texte et extrait les mots-cles techniques.
+        Ponderation intelligente basee sur:
+        - Frequence d'apparition du mot-cle
+        - Position (bonus si dans le premier tiers du document)
         Retourne un dictionnaire avec les ponderations (total = 100%).
         """
         if not text:
@@ -129,37 +132,57 @@ class JobOfferParser:
 
         # Normaliser le texte
         text_lower = text.lower()
+        text_length = len(text_lower)
+        first_third = text_length // 3  # Premier tiers du document
 
-        # Trouver tous les mots-cles presents
-        found_keywords = set()
+        # Dictionnaire pour stocker les scores bruts
+        keyword_scores = {}
 
         for keyword in TECH_KEYWORDS:
             # Pattern pour matcher le mot-cle comme mot complet
-            # Gere les cas comme "python" mais pas "pythonic"
             pattern = r'\b' + re.escape(keyword) + r'\b'
-            if re.search(pattern, text_lower):
-                # Normaliser certains synonymes
-                normalized = JobOfferParser._normalize_keyword(keyword)
-                found_keywords.add(normalized)
+            matches = list(re.finditer(pattern, text_lower))
 
-        if not found_keywords:
+            if matches:
+                normalized = JobOfferParser._normalize_keyword(keyword)
+
+                # Score de base = nombre d'occurrences
+                count = len(matches)
+
+                # Bonus si apparait dans le premier tiers (titre, intro, requirements principaux)
+                early_matches = sum(1 for m in matches if m.start() < first_third)
+                position_bonus = early_matches * 0.5  # +0.5 par occurrence dans le premier tiers
+
+                # Score total pour ce keyword
+                score = count + position_bonus
+
+                # Ajouter ou cumuler si synonyme deja present
+                if normalized in keyword_scores:
+                    keyword_scores[normalized] += score
+                else:
+                    keyword_scores[normalized] = score
+
+        if not keyword_scores:
             return {}
 
-        # Calculer les ponderations (repartition egale)
-        weight_per_keyword = round(100 / len(found_keywords), 1)
-
-        # S'assurer que le total fait 100%
+        # Convertir les scores en pourcentages (total = 100%)
+        total_score = sum(keyword_scores.values())
         requirements = {}
-        keywords_list = sorted(found_keywords)  # Tri pour consistance
 
-        total = 0
-        for i, kw in enumerate(keywords_list):
-            if i == len(keywords_list) - 1:
-                # Dernier element: ajuster pour avoir exactement 100%
-                requirements[kw] = round(100 - total, 1)
-            else:
-                requirements[kw] = weight_per_keyword
-                total += weight_per_keyword
+        for keyword, score in keyword_scores.items():
+            # Calculer le pourcentage proportionnel
+            percentage = (score / total_score) * 100
+            requirements[keyword] = round(percentage, 1)
+
+        # Ajuster pour que le total soit exactement 100%
+        total = sum(requirements.values())
+        if total != 100 and requirements:
+            # Ajuster le plus gros pour compenser
+            max_keyword = max(requirements, key=requirements.get)
+            requirements[max_keyword] = round(requirements[max_keyword] + (100 - total), 1)
+
+        # Trier par poids decroissant
+        requirements = dict(sorted(requirements.items(), key=lambda x: x[1], reverse=True))
 
         return requirements
 

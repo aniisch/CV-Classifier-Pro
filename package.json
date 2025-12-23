@@ -1,6 +1,6 @@
 {
   "name": "cv-classifier-pro",
-  "version": "2.0.0",
+  "version": "2.2.1",
   "description": "Application desktop pour analyser et classifier des CVs",
   "private": true,
   "main": "electron/main.js",
