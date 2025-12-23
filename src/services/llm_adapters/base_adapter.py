@@ -91,30 +91,39 @@ Ton role est d'evaluer objectivement la correspondance entre un CV et une offre 
 === CV DU CANDIDAT ===
 {cv_content}
 
-=== INSTRUCTIONS ===
-Analyse ce CV par rapport a l'offre d'emploi et fournis:
+=== FORMAT DE REPONSE OBLIGATOIRE ===
+IMPORTANT: Tu DOIS commencer ta reponse EXACTEMENT par ces deux lignes (remplace XX par tes valeurs):
+```
+SCORE: XX/100
+RECOMMANDATION: [RETENIR|A_REVOIR|REJETER]
+```
 
-1. **Score de correspondance** (0-100%)
-   - Evalue la compatibilite globale entre le profil et le poste
+Puis continue avec l'analyse detaillee:
 
-2. **Points forts du candidat**
-   - Liste les competences et experiences qui correspondent bien a l'offre
-   - Mentionne les atouts distinctifs
+## Resume du Profil
+(2-3 phrases resumant le candidat et son adequation au poste)
 
-3. **Points faibles / Lacunes**
-   - Identifie les competences requises qui semblent manquer
-   - Note les experiences absentes ou insuffisantes
+## Points Forts
+- Liste les competences et experiences qui correspondent bien a l'offre
+- Mentionne les atouts distinctifs
 
-4. **Analyse detaillee**
-   - Experience: adequation avec le niveau demande
-   - Competences techniques: correspondance avec les requirements
-   - Formation: pertinence par rapport au poste
-   - Soft skills: si mentionnes, evaluer leur adequation
+## Points Faibles / Lacunes
+- Identifie les competences requises qui semblent manquer
+- Note les experiences absentes ou insuffisantes
 
-5. **Recommandation finale**
-   - RETENIR: Profil tres compatible, a convoquer en entretien
-   - A REVOIR: Profil interessant mais necessite clarification
-   - REJETER: Profil insuffisamment compatible
+## Analyse Detaillee
+- **Experience**: adequation avec le niveau demande
+- **Competences techniques**: correspondance avec les requirements
+- **Formation**: pertinence par rapport au poste
+- **Soft skills**: si mentionnes, evaluer leur adequation
+
+## Conclusion
+Une phrase finale justifiant la recommandation.
+
+=== CRITERES DE NOTATION ===
+- 80-100: RETENIR - Excellent match, profil tres compatible
+- 60-79: A_REVOIR - Bon potentiel, necessite entretien pour clarifier
+- 0-59: REJETER - Profil insuffisamment compatible
 
 Reponds de maniere structuree et objective."""
 

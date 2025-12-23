@@ -20,6 +20,7 @@ from ..utils.error_handling import (
     FileSystemError
 )
 import os
+import re
 
 app = FastAPI()
 
@@ -691,33 +692,144 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def parse_llm_response(analysis_text: str) -> dict:
+    """
+    Parse le score et la recommandation depuis la reponse LLM.
+
+    Returns:
+        dict avec 'score' (int ou None), 'recommendation' (str ou None), 'analysis' (str)
+    """
+    score = None
+    recommendation = None
+
+    # Parser le score (format: "SCORE: XX/100" ou "SCORE: XX")
+    score_match = re.search(r'SCORE:\s*(\d+)\s*(?:/100)?', analysis_text, re.IGNORECASE)
+    if score_match:
+        score = int(score_match.group(1))
+        # S'assurer que le score est entre 0 et 100
+        score = max(0, min(100, score))
+
+    # Parser la recommandation
+    rec_match = re.search(r'RECOMMANDATION:\s*(RETENIR|A_REVOIR|A REVOIR|REJETER)', analysis_text, re.IGNORECASE)
+    if rec_match:
+        recommendation = rec_match.group(1).upper().replace(' ', '_')
+
+    return {
+        'score': score,
+        'recommendation': recommendation,
+        'analysis': analysis_text
+    }
+
+
+def get_recommendation_emoji(recommendation: str) -> str:
+    """Retourne l'emoji correspondant a la recommandation."""
+    emojis = {
+        'RETENIR': '✅',
+        'A_REVOIR': '⚠️',
+        'REJETER': '❌'
+    }
+    return emojis.get(recommendation, '❓')
+
+
+def get_recommendation_label(recommendation: str) -> str:
+    """Retourne le label lisible de la recommandation."""
+    labels = {
+        'RETENIR': 'Fortement recommandé',
+        'A_REVOIR': 'À considérer',
+        'REJETER': 'Non recommandé'
+    }
+    return labels.get(recommendation, 'Non évalué')
+
+
 def generate_llm_report(results: list, job_offer_name: str, provider: str, model: str) -> str:
-    """Genere un rapport Markdown a partir des resultats LLM."""
-    report = f"""# Rapport d'Analyse IA
+    """Genere un rapport Markdown avec classement a partir des resultats LLM."""
 
-## Informations
-- **Offre d'emploi**: {job_offer_name}
-- **Provider**: {provider}
-- **Modele**: {model}
-- **CVs analyses**: {len(results)}
-- **Date**: {datetime.now().strftime('%d/%m/%Y %H:%M')}
-
----
-
-"""
+    # Separer les succes et echecs
     successful = [r for r in results if r.get("success")]
     failed = [r for r in results if not r.get("success")]
 
-    if successful:
-        report += f"## Analyses ({len(successful)} CVs)\n\n"
-        for i, result in enumerate(successful, 1):
-            report += f"### {i}. {result['filename']}\n\n"
-            report += result.get("analysis", "Pas d'analyse disponible")
+    # Parser les scores pour les resultats reussis
+    parsed_results = []
+    for r in successful:
+        parsed = parse_llm_response(r.get("analysis", ""))
+        parsed_results.append({
+            'filename': r['filename'],
+            'score': parsed['score'],
+            'recommendation': parsed['recommendation'],
+            'analysis': parsed['analysis']
+        })
+
+    # Trier par score decroissant (None a la fin)
+    parsed_results.sort(key=lambda x: (x['score'] is not None, x['score'] or 0), reverse=True)
+
+    # Generer le rapport
+    report = f"""# 📊 Rapport d'Analyse IA
+
+## Informations
+| | |
+|---|---|
+| **Offre d'emploi** | {job_offer_name} |
+| **Provider** | {provider} |
+| **Modèle** | {model} |
+| **CVs analysés** | {len(results)} |
+| **Date** | {datetime.now().strftime('%d/%m/%Y à %H:%M')} |
+
+---
+
+## 🏆 Synthèse et Classement
+
+"""
+
+    if parsed_results:
+        # Tableau de classement
+        report += "| Rang | Candidat | Score | Recommandation |\n"
+        report += "|:----:|----------|:-----:|----------------|\n"
+
+        for i, r in enumerate(parsed_results, 1):
+            score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
+            rec_emoji = get_recommendation_emoji(r['recommendation'])
+            rec_label = get_recommendation_label(r['recommendation'])
+            report += f"| {i} | {r['filename']} | **{score_str}** | {rec_emoji} {rec_label} |\n"
+
+        report += "\n"
+
+        # Top 3 resume
+        top_3 = [r for r in parsed_results if r['score'] is not None][:3]
+        if top_3:
+            report += "### 🎯 Top 3 Profils\n\n"
+            for i, r in enumerate(top_3, 1):
+                # Extraire le resume du profil depuis l'analyse
+                resume_match = re.search(r'## Resume du Profil\s*\n(.*?)(?=\n##|\Z)', r['analysis'], re.DOTALL | re.IGNORECASE)
+                resume = resume_match.group(1).strip() if resume_match else "Profil analysé"
+                # Limiter a 150 caracteres
+                if len(resume) > 150:
+                    resume = resume[:147] + "..."
+                report += f"{i}. **{r['filename']}** ({r['score']}/100) - {resume}\n\n"
+
+        report += "\n---\n\n"
+
+        # Analyses detaillees
+        report += f"## 📄 Analyses Détaillées\n\n"
+
+        for i, r in enumerate(parsed_results, 1):
+            score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
+            rec_emoji = get_recommendation_emoji(r['recommendation'])
+            report += f"### {i}. {r['filename']}\n\n"
+            report += f"**Score: {score_str}** | **Recommandation: {rec_emoji} {get_recommendation_label(r['recommendation'])}**\n\n"
+
+            # Retirer les lignes SCORE et RECOMMANDATION du texte d'analyse
+            clean_analysis = re.sub(r'^SCORE:.*$', '', r['analysis'], flags=re.MULTILINE | re.IGNORECASE)
+            clean_analysis = re.sub(r'^RECOMMANDATION:.*$', '', clean_analysis, flags=re.MULTILINE | re.IGNORECASE)
+            clean_analysis = clean_analysis.strip()
+
+            report += clean_analysis
             report += "\n\n---\n\n"
 
+    # Erreurs
     if failed:
-        report += f"## Erreurs ({len(failed)} CVs)\n\n"
+        report += f"## ⚠️ Erreurs ({len(failed)} CVs)\n\n"
         for result in failed:
             report += f"- **{result['filename']}**: {result.get('error', 'Erreur inconnue')}\n"
+        report += "\n"
 
     return report
