@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..database.database import get_db
-from ..database.models import Analysis, Project, JobOffer
+from ..database.models import Analysis, Project, JobOffer, LLMSettings
 from ..database.project_manager import ProjectManager
 from ..database.job_offer_manager import JobOfferManager
 from .cv_analyzer import CVAnalyzer
@@ -420,5 +420,132 @@ async def analyze_with_job_offer(project_id: str, offer_id: str, request: dict, 
     except Exception as e:
         import traceback
         print(f"ERROR in analyze_with_job_offer: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== LLM SETTINGS ENDPOINTS =====
+
+class LLMSettingsRequest(BaseModel):
+    provider: str = "ollama"  # 'ollama', 'openai', 'anthropic'
+    api_key: str = ""
+    model: str = "llama3.2"
+    ollama_url: str = "http://localhost:11434"
+
+
+class LLMSettingsResponse(BaseModel):
+    id: int
+    provider: str
+    api_key: str
+    model: str
+    ollama_url: str
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@app.get("/api/llm-settings", response_model=LLMSettingsResponse)
+async def get_llm_settings(db: Session = Depends(get_db)):
+    """Recupere les parametres LLM"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            # Creer les settings par defaut si inexistants
+            settings = LLMSettings(
+                id=1,
+                provider="ollama",
+                api_key="",
+                model="llama3.2",
+                ollama_url="http://localhost:11434"
+            )
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
+        return settings
+    except Exception as e:
+        import traceback
+        print(f"ERROR in get_llm_settings: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/llm-settings", response_model=LLMSettingsResponse)
+async def update_llm_settings(request: LLMSettingsRequest, db: Session = Depends(get_db)):
+    """Met a jour les parametres LLM"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            # Creer si inexistant
+            settings = LLMSettings(id=1)
+            db.add(settings)
+
+        settings.provider = request.provider
+        settings.api_key = request.api_key
+        settings.model = request.model
+        settings.ollama_url = request.ollama_url
+
+        db.commit()
+        db.refresh(settings)
+        return settings
+    except Exception as e:
+        import traceback
+        print(f"ERROR in update_llm_settings: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/llm-settings/test")
+async def test_llm_connection(db: Session = Depends(get_db)):
+    """Teste la connexion au LLM configure"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            raise HTTPException(status_code=400, detail="LLM non configure")
+
+        # Test selon le provider
+        if settings.provider == "ollama":
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(f"{settings.ollama_url}/api/tags")
+                    if response.status_code == 200:
+                        models = response.json().get("models", [])
+                        model_names = [m.get("name", "") for m in models]
+                        return {
+                            "status": "ok",
+                            "provider": "ollama",
+                            "available_models": model_names
+                        }
+                    else:
+                        return {"status": "error", "message": "Ollama ne repond pas correctement"}
+            except Exception as e:
+                return {"status": "error", "message": f"Impossible de se connecter a Ollama: {str(e)}"}
+
+        elif settings.provider == "openai":
+            if not settings.api_key:
+                return {"status": "error", "message": "Cle API OpenAI manquante"}
+            # Test simple - on verifie juste que la cle a le bon format
+            if settings.api_key.startswith("sk-"):
+                return {"status": "ok", "provider": "openai", "message": "Cle API configuree"}
+            else:
+                return {"status": "error", "message": "Format de cle API invalide"}
+
+        elif settings.provider == "anthropic":
+            if not settings.api_key:
+                return {"status": "error", "message": "Cle API Anthropic manquante"}
+            if settings.api_key.startswith("sk-ant-"):
+                return {"status": "ok", "provider": "anthropic", "message": "Cle API configuree"}
+            else:
+                return {"status": "error", "message": "Format de cle API invalide"}
+
+        else:
+            return {"status": "error", "message": f"Provider inconnu: {settings.provider}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in test_llm_connection: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

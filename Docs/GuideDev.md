@@ -266,16 +266,91 @@ Solution: `show: false` au demarrage, puis `mainWindow.show()` quand tout est pr
 
 ---
 
-## Phase 3 - Mode LLM (Future)
+## Phase 3 - Mode LLM (En cours)
 
-| Tâche | Fichier | Description |
-|-------|---------|-------------|
-| Settings | `src/components/LLMSettings.jsx` | Config LLM |
-| Manager | `src/services/llm_manager.py` | Orchestration |
-| OpenAI | `src/utils/llm_adapters/openai_adapter.py` | Adapter |
-| Anthropic | `src/utils/llm_adapters/anthropic_adapter.py` | Adapter |
-| OLLAMA | `src/utils/llm_adapters/ollama_adapter.py` | Adapter local |
-| Guide | Integre dans l'app | Setup OLLAMA |
+### Objectif
+Ajouter une analyse intelligente CV vs Offre d'emploi avec un LLM (IA).
+Le LLM compare le contenu du CV avec l'offre et donne un score + analyse détaillée.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  FRONTEND                                           │
+│  ├─ LLMSettings.jsx (choix provider + API key)     │
+│  └─ CVAnalyzerForm.jsx (bouton "Analyse IA")       │
+├─────────────────────────────────────────────────────┤
+│  BACKEND                                            │
+│  ├─ llm_manager.py (orchestration + prompt)        │
+│  └─ llm_adapters/                                  │
+│       ├─ base_adapter.py (interface commune)       │
+│       ├─ openai_adapter.py                         │
+│       ├─ anthropic_adapter.py                      │
+│       └─ ollama_adapter.py (local, gratuit)        │
+├─────────────────────────────────────────────────────┤
+│  DATABASE                                           │
+│  └─ llm_settings table (provider, api_key, model)  │
+└─────────────────────────────────────────────────────┘
+```
+
+### Providers supportés
+
+| Provider | Avantage | Inconvénient |
+|----------|----------|--------------|
+| **Ollama** | Gratuit, local, données privées | Nécessite installation + modèle |
+| **OpenAI** | GPT-4, rapide, fiable | Payant (~$0.01/CV) |
+| **Anthropic** | Claude, excellent raisonnement | Payant (~$0.01/CV) |
+
+### 3.1 - Settings LLM (Frontend)
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/components/LLMSettings.jsx` | CREER | Modal config: provider, API key, modèle |
+| `src/components/HomeScreen.jsx` | MODIFIER | Bouton settings (engrenage) |
+| `src/database/models.py` | MODIFIER | Table LLMSettings |
+| `src/services/api.py` | MODIFIER | CRUD /api/llm-settings |
+
+### 3.2 - LLM Manager (Backend)
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/services/llm_manager.py` | CREER | Orchestration, routing vers adapters |
+| `src/services/llm_adapters/__init__.py` | CREER | Package adapters |
+| `src/services/llm_adapters/base_adapter.py` | CREER | Interface commune (ABC) |
+
+### 3.3 - Adapters
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/services/llm_adapters/ollama_adapter.py` | CREER | Adapter Ollama (local) |
+| `src/services/llm_adapters/openai_adapter.py` | CREER | Adapter OpenAI |
+| `src/services/llm_adapters/anthropic_adapter.py` | CREER | Adapter Anthropic |
+
+### 3.4 - Endpoint analyse LLM
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/services/api.py` | MODIFIER | POST /api/projects/{id}/analyze-llm |
+| `src/services/cv_analyzer.py` | MODIFIER | Méthode analyze_with_llm() |
+
+### 3.5 - Intégration UI
+| Fichier | Action | Description |
+|---------|--------|-------------|
+| `src/components/CVAnalyzerForm.jsx` | MODIFIER | Toggle "Mode IA" ou bouton séparé |
+| `src/components/AnalysisReport.jsx` | MODIFIER | Afficher analyse LLM (markdown) |
+
+### Prompt LLM (exemple)
+```
+Tu es un expert RH. Compare ce CV avec cette offre d'emploi.
+
+OFFRE D'EMPLOI:
+{job_offer_content}
+
+CV DU CANDIDAT:
+{cv_content}
+
+Analyse:
+1. Score de correspondance (0-100%)
+2. Points forts du candidat
+3. Points faibles / manques
+4. Recommandation (Retenir / À revoir / Rejeter)
+```
 
 ---
 

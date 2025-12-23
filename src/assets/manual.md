@@ -115,4 +115,4 @@ En cas de probleme :
 
 ---
 
-**Version 2.1.0** - CV Classifier Pro
+**Version 2.2.1** - CV Classifier Pro
