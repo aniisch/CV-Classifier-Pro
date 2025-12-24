@@ -1,33 +1,37 @@
 # CV Classifier Pro
 
-Application desktop multi-projets pour l'analyse et la classification de CV. Deux modes disponibles : mode simple avec analyse par mots-clés pondérés, et mode LLM pour comparaison intelligente avec les offres d'emploi.
+Application desktop multi-projets pour l'analyse et la classification de CV. Trois modes d'analyse disponibles : mots-clés, offre d'emploi, et analyse IA (LLM).
 
 ## Fonctionnalités
 
-### Phase 1 - Mode Simple (Terminé)
-- Gestion multi-projets : créez et gérez plusieurs projets d'analyse indépendants
+### Mode Mots-clés
+- Gestion multi-projets indépendants
 - Analyse par mots-clés avec système de pondération (total = 100%)
 - Scoring pondéré basé sur les mots-clés trouvés dans les CVs
 - Rapports détaillés en Markdown avec statistiques
 - Export PDF des rapports
-- Base de données locale SQLite pour l'historique persistant
-- Interface intuitive avec Material-UI
-- Mode hors-ligne complet
-- Application desktop Electron avec sélection native de dossiers
 
-### Phase 2 - Gestion des Offres d'Emploi (Termine)
+### Mode Offre d'Emploi
 - Upload d'offres d'emploi (PDF/TXT)
-- Parsing automatique pour extraire les requirements techniques
-- Detection de 100+ mots-cles techniques (langages, frameworks, outils)
-- Ponderation automatique des requirements
-- Analyse basee sur l'offre avec matching de mots-cles
-- Choix du mode d'analyse : mots-cles manuels ou offre d'emploi
+- Extraction automatique des requirements techniques (100+ mots-clés)
+- Pondération intelligente basée sur fréquence et position
+- Édition manuelle des pondérations
+- Analyse CVs vs requirements de l'offre
 
-### Phase 3 - Mode LLM (Futur)
-- Support multi-provider LLM : OpenAI, Anthropic, OLLAMA
-- Exécution locale avec OLLAMA pour la sécurité
-- Analyse intelligente de compatibilité CV-Offre
-- Reasoning et suggestions contextuelles
+### Mode IA (LLM)
+- Support multi-provider : Ollama (local), OpenAI, Anthropic
+- Exécution locale avec Ollama (gratuit, données privées)
+- Analyse intelligente CV vs Offre par l'IA
+- **Rapport avec classement** : tableau de ranking, top 3, synthèse
+- Score de correspondance, points forts/faibles, recommandation
+- **Sélection de CVs** : tous, top N, ou sélection manuelle
+
+### Général
+- Base de données locale SQLite
+- Interface Material-UI intuitive
+- Manuel d'utilisation intégré
+- Splash screen personnalisé
+- Application desktop Electron
 
 ## Prérequis
 
@@ -131,7 +135,12 @@ cv-classifier-pro/
 │   │   └── AnalysisHistory.jsx  # Historique analyses
 │   ├── services/
 │   │   ├── api.py              # Backend FastAPI
-│   │   └── cv_analyzer.py      # Logique d'analyse
+│   │   ├── cv_analyzer.py      # Logique d'analyse
+│   │   ├── llm_manager.py      # Orchestration LLM
+│   │   └── llm_adapters/       # Adaptateurs LLM
+│   │       ├── ollama_adapter.py
+│   │       ├── openai_adapter.py
+│   │       └── anthropic_adapter.py
 │   ├── database/
 │   │   ├── models.py           # Modèles SQLAlchemy
 │   │   ├── database.py         # Configuration DB
@@ -167,6 +176,10 @@ cv-classifier-pro/
 | PUT | /api/job-offers/{id} | Modifie les requirements |
 | DELETE | /api/job-offers/{id} | Supprime une offre |
 | POST | /api/projects/{id}/analyze-offer/{offer_id} | Analyse avec offre |
+| POST | /api/projects/{id}/analyze-llm | Analyse IA (LLM) |
+| GET | /api/llm-settings | Récupère la config LLM |
+| PUT | /api/llm-settings | Met à jour la config LLM |
+| GET | /api/llm-settings/test | Teste la connexion LLM |
 | GET | /api/health | Health check |
 
 Swagger UI disponible sur http://localhost:8000/docs
@@ -192,11 +205,30 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Analyse basee sur offre
 - [x] Integration dans CVAnalyzerForm (choix mode)
 
-### Phase 3 - Mode LLM
-- [ ] Adaptateurs LLM (OpenAI, Anthropic, OLLAMA)
-- [ ] Configuration API keys
-- [ ] Guide setup OLLAMA
-- [ ] LLMAnalyzer service
+### Phase 2.1 - Optimisations (Terminé)
+- [x] Manuel d'utilisation intégré
+- [x] Icône personnalisée
+- [x] Pondération intelligente des offres
+- [x] Splash screen personnalisé
+
+### Phase 3 - Mode LLM (Terminé)
+- [x] Adaptateurs LLM (Ollama, OpenAI, Anthropic)
+- [x] Configuration provider et API keys
+- [x] Interface settings LLM
+- [x] LLM Manager (orchestration)
+- [x] Endpoint analyse IA
+- [x] Intégration dans CVAnalyzerForm
+
+### Phase 3.1 - Améliorations LLM (Terminé)
+- [x] Rapport avec classement et synthèse
+- [x] Top 3 profils avec résumé
+- [x] Sélection de CVs (tous / Top N / manuel)
+- [x] Parsing automatique scores et recommandations
+
+### Optimisations futures
+- [ ] Queue/Worker pour gros batches
+- [ ] Tests unitaires
+- [ ] CI/CD pipeline
 
 ## Licence
 

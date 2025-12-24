@@ -11,10 +11,11 @@
 
 ## Vue d'ensemble
 
-CV Classifier Pro est une application desktop multi-projets avec deux modes d'analyse:
+CV Classifier Pro est une application desktop multi-projets avec trois modes d'analyse:
 
-- **Mode Simple** (Phase 1 - Terminé): Analyse par mots-clés pondérés
-- **Mode LLM** (Phase 3 - Futur): Comparaison intelligente CV-Offre avec LLM
+- **Mode Mots-cles** (Phase 1): Analyse par mots-cles ponderes
+- **Mode Offre d'emploi** (Phase 2): Extraction auto des requirements + analyse
+- **Mode IA/LLM** (Phase 3): Analyse intelligente avec IA (Ollama/OpenAI/Anthropic)
 
 ### Stack Technique
 
@@ -114,6 +115,7 @@ User → HomeScreen (sélectionne un projet)
 
 ## API Endpoints
 
+### Projets
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
 | GET | `/api/projects` | Liste tous les projets |
@@ -121,9 +123,35 @@ User → HomeScreen (sélectionne un projet)
 | GET | `/api/projects/{id}` | Récupère un projet |
 | PUT | `/api/projects/{id}` | Met à jour un projet |
 | DELETE | `/api/projects/{id}` | Supprime un projet |
+
+### Analyses
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
 | GET | `/api/projects/{id}/analyses` | Historique des analyses |
-| POST | `/api/projects/{id}/analyze` | Lance une analyse |
+| POST | `/api/projects/{id}/analyze` | Analyse par mots-cles |
+| POST | `/api/projects/{id}/analyze-offer/{offer_id}` | Analyse par offre d'emploi |
+| POST | `/api/projects/{id}/analyze-llm` | Analyse IA (LLM) |
 | DELETE | `/api/analyses/{id}` | Supprime une analyse |
+
+### Offres d'emploi
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/api/projects/{id}/job-offers` | Liste les offres d'un projet |
+| POST | `/api/projects/{id}/job-offers` | Upload une offre |
+| GET | `/api/job-offers/{id}` | Récupère une offre |
+| PUT | `/api/job-offers/{id}` | Met à jour une offre |
+| DELETE | `/api/job-offers/{id}` | Supprime une offre |
+
+### LLM Settings
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/api/llm-settings` | Récupère la config LLM |
+| PUT | `/api/llm-settings` | Met à jour la config LLM |
+| GET | `/api/llm-settings/test` | Teste la connexion LLM |
+
+### Utilitaires
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
 | GET | `/api/health` | Health check |
 
 ### Exemple requête analyse
@@ -219,69 +247,178 @@ Les fichiers seront dans `out/make/`.
 
 ---
 
-## Phase 2.1 - Optimisations (En cours)
+## Phase 2.1 - Optimisations ✅
 
-### 2.1.1 - Manuel d'utilisation
-| Fichier | Action | Description |
+### 2.1.1 - Manuel d'utilisation ✅
+| Fichier | Status | Description |
 |---------|--------|-------------|
-| `src/components/UserManual.jsx` | CREER | Composant modal avec le guide |
-| `src/components/HomeScreen.jsx` | MODIFIER | Bouton "?" pour ouvrir le manuel |
-| `src/assets/manual.md` | CREER | Contenu du manuel en Markdown |
+| `src/components/UserManual.jsx` | ✅ Créé | Modal avec guide utilisateur |
+| `src/components/HomeScreen.jsx` | ✅ Modifié | Bouton "?" en haut à droite |
+| `src/assets/manual.md` | ✅ Créé | Contenu du manuel |
 
-### 2.1.2 - Icone personnalisee
-| Fichier | Action | Description |
+### 2.1.2 - Icone personnalisee ✅
+| Fichier | Status | Description |
 |---------|--------|-------------|
-| `assets/icon.ico` | CREER | Icone Windows 256x256 |
-| `assets/icon.png` | CREER | Icone PNG pour autres OS |
-| `forge.config.js` | MODIFIER | Ajouter reference icone |
-| `electron/main.js` | MODIFIER | Icone fenetre |
+| `assets/icon.ico` | ✅ Créé | Icone Windows |
+| `assets/icon.png` | ✅ Créé | Icone PNG |
+| `forge.config.js` | ✅ Modifié | Reference icone |
 
-### 2.1.3 - Ponderation intelligente des offres
-| Fichier | Action | Description |
+### 2.1.3 - Ponderation intelligente des offres ✅
+| Fichier | Status | Description |
 |---------|--------|-------------|
-| `src/services/job_offer_parser.py` | MODIFIER | Ponderation basee sur frequence/position |
-| `src/components/JobOfferUpload.jsx` | MODIFIER | Ajouter edition des ponderations |
+| `src/services/job_offer_parser.py` | ✅ Modifié | Frequence + position |
+| `src/components/JobOfferUpload.jsx` | ✅ Modifié | Edition des ponderations |
+| `src/components/JobOfferEdit.jsx` | ✅ Créé | Edition offres existantes |
 
-Logique proposee:
-- Compter les occurrences de chaque keyword
-- Bonus si le mot apparait dans titre/premier paragraphe
-- Ponderation proportionnelle (pas equitable)
-- Permettre a l'utilisateur de modifier les ponderations apres extraction
-
-### 2.1.4 - Amelioration chargement Electron
-| Fichier | Action | Description |
+### 2.1.4 - Splash screen personnalise ✅
+| Fichier | Status | Description |
 |---------|--------|-------------|
-| `electron/main.js` | MODIFIER | Attendre backend + frontend avant show |
-| `src/components/SplashScreen.jsx` | CREER | Ecran de chargement personnalise |
-| `assets/splash.png` | CREER | Image splash screen |
-
-Probleme actuel: La fenetre s'affiche, disparait, reapparait
-Solution: `show: false` au demarrage, puis `mainWindow.show()` quand tout est pret
-
-### 2.1.5 - Splash screen personnalise (optionnel)
-| Fichier | Action | Description |
-|---------|--------|-------------|
-| `electron/splash.html` | CREER | HTML du splash screen |
-| `electron/main.js` | MODIFIER | Afficher splash pendant chargement |
+| `electron/splash.html` | ✅ Créé | HTML du splash animé |
+| `electron/main.js` | ✅ Modifié | Splash → Backend → Main window |
 
 ---
 
-## Phase 3 - Mode LLM (Future)
+## Phase 3 - Mode LLM ✅
 
-| Tâche | Fichier | Description |
-|-------|---------|-------------|
-| Settings | `src/components/LLMSettings.jsx` | Config LLM |
-| Manager | `src/services/llm_manager.py` | Orchestration |
-| OpenAI | `src/utils/llm_adapters/openai_adapter.py` | Adapter |
-| Anthropic | `src/utils/llm_adapters/anthropic_adapter.py` | Adapter |
-| OLLAMA | `src/utils/llm_adapters/ollama_adapter.py` | Adapter local |
-| Guide | Integre dans l'app | Setup OLLAMA |
+### Objectif
+Analyse intelligente CV vs Offre d'emploi avec un LLM (IA).
+
+### Architecture
+```
+┌─────────────────────────────────────────────────────┐
+│  FRONTEND                                           │
+│  ├─ LLMSettings.jsx (config provider/API key)      │
+│  └─ CVAnalyzerForm.jsx (3 modes: keywords/offre/IA)│
+├─────────────────────────────────────────────────────┤
+│  BACKEND                                            │
+│  ├─ llm_manager.py (orchestration)                 │
+│  └─ llm_adapters/                                  │
+│       ├─ base_adapter.py (interface ABC)           │
+│       ├─ ollama_adapter.py (local, gratuit)        │
+│       ├─ openai_adapter.py (GPT-4)                 │
+│       └─ anthropic_adapter.py (Claude)             │
+├─────────────────────────────────────────────────────┤
+│  DATABASE                                           │
+│  └─ llm_settings (provider, api_key, model)        │
+└─────────────────────────────────────────────────────┘
+```
+
+### 3.1 - Settings LLM ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/components/LLMSettings.jsx` | ✅ Créé | Modal config LLM |
+| `src/components/HomeScreen.jsx` | ✅ Modifié | Bouton engrenage |
+| `src/database/models.py` | ✅ Modifié | Table LLMSettings |
+| `src/services/api.py` | ✅ Modifié | CRUD /api/llm-settings |
+
+### 3.2 - LLM Manager ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/services/llm_manager.py` | ✅ Créé | Orchestration |
+| `src/services/llm_adapters/__init__.py` | ✅ Créé | Package |
+| `src/services/llm_adapters/base_adapter.py` | ✅ Créé | Interface ABC |
+
+### 3.3 - Adapters ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/services/llm_adapters/ollama_adapter.py` | ✅ Créé | Ollama local |
+| `src/services/llm_adapters/openai_adapter.py` | ✅ Créé | OpenAI GPT |
+| `src/services/llm_adapters/anthropic_adapter.py` | ✅ Créé | Anthropic Claude |
+
+### 3.4 - Endpoint + UI ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/services/api.py` | ✅ Modifié | POST /api/projects/{id}/analyze-llm |
+| `src/components/CVAnalyzerForm.jsx` | ✅ Modifié | Mode "Analyse IA" |
+
+---
+
+### v2.1.0 - Optimisations
+- Manuel d'utilisation intégré
+- Icône personnalisée
+- Pondération intelligente des offres
+- Splash screen personnalisé
+- Amélioration du chargement Electron
+
+### v3.0.0 - Mode LLM
+- Configuration LLM (Ollama/OpenAI/Anthropic)
+- Analyse IA des CVs vs offre d'emploi
+- Support modèles locaux (Ollama) et cloud
+- Rapport d'analyse détaillé par l'IA
+
+### v3.1.0 - Améliorations LLM
+- Rapport avec classement et synthèse (tableau de ranking)
+- Top 3 profils avec résumé
+- Sélection de CVs (tous / Top N / manuel)
+- Parsing automatique des scores et recommandations
+
+---
+
+## Phase 3.1 - Améliorations LLM ✅
+
+### Objectif
+Améliorer l'expérience d'analyse IA avec sélection de CVs et rapport enrichi.
+
+### 3.1.1 - Rapport LLM amélioré ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/services/llm_adapters/base_adapter.py` | ✅ Modifié | Prompt structuré avec SCORE/RECOMMANDATION |
+| `src/services/api.py` | ✅ Modifié | parse_llm_response + generate_llm_report amélioré |
+
+**Structure du nouveau rapport:**
+```markdown
+# Analyse IA - [Projet] - [Date]
+
+## 📊 Synthèse et Classement
+
+| Rang | Candidat | Score | Recommandation |
+|------|----------|-------|----------------|
+| 1 | cv_dupont.pdf | 85/100 | ✅ Fortement recommandé |
+| 2 | cv_martin.pdf | 72/100 | ✅ Recommandé |
+| 3 | cv_durand.pdf | 58/100 | ⚠️ À considérer |
+
+### Top 3 Profils
+1. **Jean Dupont** - Excellent match technique...
+2. **Marie Martin** - Bon profil avec expérience...
+3. **Pierre Durand** - Profil junior prometteur...
+
+---
+
+## 📄 Analyses Détaillées
+
+### 1. cv_dupont.pdf (Score: 85/100)
+[Analyse complète générée par l'IA]
+
+### 2. cv_martin.pdf (Score: 72/100)
+[Analyse complète générée par l'IA]
+...
+```
+
+### 3.1.2 - Sélection de CVs ✅
+| Fichier | Status | Description |
+|---------|--------|-------------|
+| `src/components/CVAnalyzerForm.jsx` | ✅ Modifié | Mode sélection (All/TopN/Manual) |
+| `src/services/api.py` | ✅ Modifié | Paramètre cv_files optionnel |
+
+**Modes de sélection:**
+- **Tous les CVs** - Comportement actuel (dossier complet)
+- **Top N** - Sélectionner une analyse précédente → prendre les N meilleurs
+- **Manuel** - Sélectionner une analyse précédente → checkboxes
+
+**Flow UI:**
+```
+Mode LLM sélectionné
+  └─ Source des CVs:
+       ├─ ○ Tous (dossier) [actuel]
+       ├─ ○ Top N d'une analyse → [Select analyse] [Slider N]
+       └─ ○ Sélection manuelle → [Select analyse] [Checkboxes CVs]
+```
 
 ---
 
 ## Optimisations futures
 
-- [ ] Queue/Worker pour gros batches
+- [ ] Queue/Worker pour gros batches LLM
 - [ ] Tests unitaires
 - [ ] CI/CD pipeline
 - [ ] Auto-update Electron

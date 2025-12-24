@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..database.database import get_db
-from ..database.models import Analysis, Project, JobOffer
+from ..database.models import Analysis, Project, JobOffer, LLMSettings
 from ..database.project_manager import ProjectManager
 from ..database.job_offer_manager import JobOfferManager
 from .cv_analyzer import CVAnalyzer
@@ -20,6 +20,7 @@ from ..utils.error_handling import (
     FileSystemError
 )
 import os
+import re
 
 app = FastAPI()
 
@@ -422,3 +423,427 @@ async def analyze_with_job_offer(project_id: str, offer_id: str, request: dict, 
         print(f"ERROR in analyze_with_job_offer: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== LLM SETTINGS ENDPOINTS =====
+
+class LLMSettingsRequest(BaseModel):
+    provider: str = "ollama"  # 'ollama', 'openai', 'anthropic'
+    api_key: str = ""
+    model: str = "llama3.2"
+    ollama_url: str = "http://localhost:11434"
+
+
+class LLMSettingsResponse(BaseModel):
+    id: int
+    provider: str
+    api_key: str
+    model: str
+    ollama_url: str
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@app.get("/api/llm-settings", response_model=LLMSettingsResponse)
+async def get_llm_settings(db: Session = Depends(get_db)):
+    """Recupere les parametres LLM"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            # Creer les settings par defaut si inexistants
+            settings = LLMSettings(
+                id=1,
+                provider="ollama",
+                api_key="",
+                model="llama3.2",
+                ollama_url="http://localhost:11434"
+            )
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
+        return settings
+    except Exception as e:
+        import traceback
+        print(f"ERROR in get_llm_settings: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/llm-settings", response_model=LLMSettingsResponse)
+async def update_llm_settings(request: LLMSettingsRequest, db: Session = Depends(get_db)):
+    """Met a jour les parametres LLM"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            # Creer si inexistant
+            settings = LLMSettings(id=1)
+            db.add(settings)
+
+        settings.provider = request.provider
+        settings.api_key = request.api_key
+        settings.model = request.model
+        settings.ollama_url = request.ollama_url
+
+        db.commit()
+        db.refresh(settings)
+        return settings
+    except Exception as e:
+        import traceback
+        print(f"ERROR in update_llm_settings: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/llm-settings/test")
+async def test_llm_connection(db: Session = Depends(get_db)):
+    """Teste la connexion au LLM configure"""
+    try:
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            raise HTTPException(status_code=400, detail="LLM non configure")
+
+        # Test selon le provider
+        if settings.provider == "ollama":
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(f"{settings.ollama_url}/api/tags")
+                    if response.status_code == 200:
+                        models = response.json().get("models", [])
+                        model_names = [m.get("name", "") for m in models]
+                        return {
+                            "status": "ok",
+                            "provider": "ollama",
+                            "available_models": model_names
+                        }
+                    else:
+                        return {"status": "error", "message": "Ollama ne repond pas correctement"}
+            except Exception as e:
+                return {"status": "error", "message": f"Impossible de se connecter a Ollama: {str(e)}"}
+
+        elif settings.provider == "openai":
+            if not settings.api_key:
+                return {"status": "error", "message": "Cle API OpenAI manquante"}
+            # Test reel avec l'API OpenAI
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(
+                        "https://api.openai.com/v1/models",
+                        headers={"Authorization": f"Bearer {settings.api_key}"}
+                    )
+                    if response.status_code == 200:
+                        return {"status": "ok", "provider": "openai", "message": "Connexion reussie"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Cle API invalide ou expiree"}
+                    else:
+                        return {"status": "error", "message": f"Erreur API: {response.status_code}"}
+            except Exception as e:
+                return {"status": "error", "message": f"Erreur de connexion: {str(e)}"}
+
+        elif settings.provider == "anthropic":
+            if not settings.api_key:
+                return {"status": "error", "message": "Cle API Anthropic manquante"}
+            # Test reel avec l'API Anthropic
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": settings.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": settings.model,
+                            "max_tokens": 10,
+                            "messages": [{"role": "user", "content": "test"}]
+                        }
+                    )
+                    if response.status_code == 200:
+                        return {"status": "ok", "provider": "anthropic", "message": "Connexion reussie"}
+                    elif response.status_code == 401:
+                        return {"status": "error", "message": "Cle API invalide ou expiree"}
+                    else:
+                        error_data = response.json()
+                        error_msg = error_data.get("error", {}).get("message", f"Erreur {response.status_code}")
+                        return {"status": "error", "message": error_msg}
+            except Exception as e:
+                return {"status": "error", "message": f"Erreur de connexion: {str(e)}"}
+
+        else:
+            return {"status": "error", "message": f"Provider inconnu: {settings.provider}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in test_llm_connection: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== LLM ANALYSIS ENDPOINT =====
+
+class LLMAnalysisRequest(BaseModel):
+    folder_path: str
+    job_offer_id: str
+    cv_files: Optional[List[str]] = None  # Liste optionnelle de fichiers specifiques
+    source_analysis_id: Optional[int] = None  # ID de l'analyse source (pour traçabilité)
+
+
+@app.post("/api/projects/{project_id}/analyze-llm")
+async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Session = Depends(get_db)):
+    """
+    Analyse les CVs avec un LLM par rapport a une offre d'emploi.
+    Retourne une analyse detaillee pour chaque CV.
+    """
+    try:
+        # 1. Verifier que le projet existe
+        project = ProjectManager.get_project(db, project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet non trouve")
+
+        # 2. Verifier que l'offre existe
+        job_offer = JobOfferManager.get_job_offer(db, request.job_offer_id)
+        if not job_offer:
+            raise HTTPException(status_code=404, detail="Offre d'emploi non trouvee")
+
+        # 3. Verifier le dossier CVs
+        folder_path = request.folder_path
+        if not os.path.exists(folder_path):
+            raise HTTPException(status_code=400, detail=f"Dossier non trouve: {folder_path}")
+
+        # 4. Charger les settings LLM
+        settings = db.query(LLMSettings).first()
+        if not settings:
+            raise HTTPException(status_code=400, detail="LLM non configure. Allez dans les parametres.")
+
+        # 5. Lire les CVs (soit tous, soit selection specifique)
+        from PyPDF2 import PdfReader
+        cvs = []
+
+        # Determiner la liste des fichiers a analyser
+        if request.cv_files and len(request.cv_files) > 0:
+            # Mode selection: utiliser uniquement les fichiers specifies
+            files_to_analyze = request.cv_files
+        else:
+            # Mode tous: scanner tout le dossier
+            files_to_analyze = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
+
+        for filename in files_to_analyze:
+            if filename.lower().endswith('.pdf'):
+                filepath = os.path.join(folder_path, filename)
+                if not os.path.exists(filepath):
+                    print(f"Fichier non trouve: {filepath}")
+                    continue
+                try:
+                    reader = PdfReader(filepath)
+                    text = ""
+                    for page in reader.pages:
+                        text += page.extract_text() or ""
+                    if text.strip():
+                        cvs.append({"filename": filename, "content": text})
+                except Exception as e:
+                    print(f"Erreur lecture {filename}: {e}")
+
+        if not cvs:
+            raise HTTPException(status_code=400, detail="Aucun CV valide trouve dans le dossier")
+
+        # 6. Creer le LLM Manager et analyser
+        from .llm_manager import LLMManager
+        llm_manager = LLMManager(db)
+
+        results = []
+        for cv in cvs:
+            try:
+                response = await llm_manager.analyze_cv(
+                    cv_content=cv["content"],
+                    job_offer_content=job_offer.raw_content
+                )
+                results.append({
+                    "filename": cv["filename"],
+                    "success": True,
+                    "analysis": response.content,
+                    "model": response.model,
+                    "provider": response.provider,
+                    "tokens": response.usage
+                })
+            except Exception as e:
+                results.append({
+                    "filename": cv["filename"],
+                    "success": False,
+                    "error": str(e)
+                })
+
+        # 7. Generer le rapport Markdown
+        report = generate_llm_report(results, job_offer.filename, settings.provider, settings.model)
+
+        # 8. Sauvegarder l'analyse
+        analysis = Analysis(
+            project_id=project_id,
+            job_offer_id=request.job_offer_id,
+            date=datetime.now(),
+            report=report,
+            keywords={"mode": "llm", "provider": settings.provider, "model": settings.model},
+            folder_path=folder_path,
+            results=results
+        )
+        db.add(analysis)
+        db.commit()
+
+        return {"report": report, "results": results}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in analyze_with_llm: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def parse_llm_response(analysis_text: str) -> dict:
+    """
+    Parse le score et la recommandation depuis la reponse LLM.
+
+    Returns:
+        dict avec 'score' (int ou None), 'recommendation' (str ou None), 'analysis' (str)
+    """
+    score = None
+    recommendation = None
+
+    # Parser le score (format: "SCORE: XX/100" ou "SCORE: XX")
+    score_match = re.search(r'SCORE:\s*(\d+)\s*(?:/100)?', analysis_text, re.IGNORECASE)
+    if score_match:
+        score = int(score_match.group(1))
+        # S'assurer que le score est entre 0 et 100
+        score = max(0, min(100, score))
+
+    # Parser la recommandation
+    rec_match = re.search(r'RECOMMANDATION:\s*(RETENIR|A_REVOIR|A REVOIR|REJETER)', analysis_text, re.IGNORECASE)
+    if rec_match:
+        recommendation = rec_match.group(1).upper().replace(' ', '_')
+
+    return {
+        'score': score,
+        'recommendation': recommendation,
+        'analysis': analysis_text
+    }
+
+
+def get_recommendation_emoji(recommendation: str) -> str:
+    """Retourne l'emoji correspondant a la recommandation."""
+    emojis = {
+        'RETENIR': '✅',
+        'A_REVOIR': '⚠️',
+        'REJETER': '❌'
+    }
+    return emojis.get(recommendation, '❓')
+
+
+def get_recommendation_label(recommendation: str) -> str:
+    """Retourne le label lisible de la recommandation."""
+    labels = {
+        'RETENIR': 'Fortement recommandé',
+        'A_REVOIR': 'À considérer',
+        'REJETER': 'Non recommandé'
+    }
+    return labels.get(recommendation, 'Non évalué')
+
+
+def generate_llm_report(results: list, job_offer_name: str, provider: str, model: str) -> str:
+    """Genere un rapport Markdown avec classement a partir des resultats LLM."""
+
+    # Separer les succes et echecs
+    successful = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+
+    # Parser les scores pour les resultats reussis
+    parsed_results = []
+    for r in successful:
+        parsed = parse_llm_response(r.get("analysis", ""))
+        parsed_results.append({
+            'filename': r['filename'],
+            'score': parsed['score'],
+            'recommendation': parsed['recommendation'],
+            'analysis': parsed['analysis']
+        })
+
+    # Trier par score decroissant (None a la fin)
+    parsed_results.sort(key=lambda x: (x['score'] is not None, x['score'] or 0), reverse=True)
+
+    # Generer le rapport
+    report = f"""# 📊 Rapport d'Analyse IA
+
+## Informations
+| | |
+|---|---|
+| **Offre d'emploi** | {job_offer_name} |
+| **Provider** | {provider} |
+| **Modèle** | {model} |
+| **CVs analysés** | {len(results)} |
+| **Date** | {datetime.now().strftime('%d/%m/%Y à %H:%M')} |
+
+---
+
+## 🏆 Synthèse et Classement
+
+"""
+
+    if parsed_results:
+        # Tableau de classement
+        report += "| Rang | Candidat | Score | Recommandation |\n"
+        report += "|:----:|----------|:-----:|----------------|\n"
+
+        for i, r in enumerate(parsed_results, 1):
+            score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
+            rec_emoji = get_recommendation_emoji(r['recommendation'])
+            rec_label = get_recommendation_label(r['recommendation'])
+            report += f"| {i} | {r['filename']} | **{score_str}** | {rec_emoji} {rec_label} |\n"
+
+        report += "\n"
+
+        # Top 3 resume
+        top_3 = [r for r in parsed_results if r['score'] is not None][:3]
+        if top_3:
+            report += "### 🎯 Top 3 Profils\n\n"
+            for i, r in enumerate(top_3, 1):
+                # Extraire le resume du profil depuis l'analyse
+                resume_match = re.search(r'## Resume du Profil\s*\n(.*?)(?=\n##|\Z)', r['analysis'], re.DOTALL | re.IGNORECASE)
+                resume = resume_match.group(1).strip() if resume_match else "Profil analysé"
+                # Limiter a 150 caracteres
+                if len(resume) > 150:
+                    resume = resume[:147] + "..."
+                report += f"{i}. **{r['filename']}** ({r['score']}/100) - {resume}\n\n"
+
+        report += "\n---\n\n"
+
+        # Analyses detaillees
+        report += f"## 📄 Analyses Détaillées\n\n"
+
+        for i, r in enumerate(parsed_results, 1):
+            score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
+            rec_emoji = get_recommendation_emoji(r['recommendation'])
+            report += f"### {i}. {r['filename']}\n\n"
+            report += f"**Score: {score_str}** | **Recommandation: {rec_emoji} {get_recommendation_label(r['recommendation'])}**\n\n"
+
+            # Retirer les lignes SCORE et RECOMMANDATION du texte d'analyse
+            clean_analysis = re.sub(r'^SCORE:.*$', '', r['analysis'], flags=re.MULTILINE | re.IGNORECASE)
+            clean_analysis = re.sub(r'^RECOMMANDATION:.*$', '', clean_analysis, flags=re.MULTILINE | re.IGNORECASE)
+            clean_analysis = clean_analysis.strip()
+
+            report += clean_analysis
+            report += "\n\n---\n\n"
+
+    # Erreurs
+    if failed:
+        report += f"## ⚠️ Erreurs ({len(failed)} CVs)\n\n"
+        for result in failed:
+            report += f"- **{result['filename']}**: {result.get('error', 'Erreur inconnue')}\n"
+        report += "\n"
+
+    return report

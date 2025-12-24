@@ -19,9 +19,10 @@ import {
   Tooltip,
   Paper
 } from '@mui/material';
-import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, HelpOutline as HelpIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Add as AddIcon, HelpOutline as HelpIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { useProject } from '../hooks/useProject';
 import UserManual from './UserManual';
+import LLMSettings from './LLMSettings';
 
 function HomeScreen({ onProjectSelect }) {
   const { projects, currentProject, loading, error, createProject, deleteProject } = useProject();
@@ -31,6 +32,7 @@ function HomeScreen({ onProjectSelect }) {
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [showLLMSettings, setShowLLMSettings] = useState(false);
 
   const handleOpenCreateDialog = () => {
     setDialogMode('create');
@@ -75,22 +77,33 @@ function HomeScreen({ onProjectSelect }) {
       <Container maxWidth="lg">
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4, position: 'relative' }}>
-          {/* Bouton Aide */}
-          <Tooltip title="Guide d'utilisation">
-            <IconButton
-              onClick={() => setShowManual(true)}
-              sx={{
-                position: 'absolute',
-                top: 0,
-                right: 0,
-                bgcolor: 'primary.main',
-                color: 'white',
-                '&:hover': { bgcolor: 'primary.dark' }
-              }}
-            >
-              <HelpIcon />
-            </IconButton>
-          </Tooltip>
+          {/* Boutons en haut a droite */}
+          <Box sx={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: 1 }}>
+            <Tooltip title="Configuration LLM">
+              <IconButton
+                onClick={() => setShowLLMSettings(true)}
+                sx={{
+                  bgcolor: 'secondary.main',
+                  color: 'white',
+                  '&:hover': { bgcolor: 'secondary.dark' }
+                }}
+              >
+                <SettingsIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Guide d'utilisation">
+              <IconButton
+                onClick={() => setShowManual(true)}
+                sx={{
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  '&:hover': { bgcolor: 'primary.dark' }
+                }}
+              >
+                <HelpIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
 
           <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold', mb: 1 }}>
             CV Classifier Pro
@@ -251,6 +264,9 @@ function HomeScreen({ onProjectSelect }) {
 
         {/* User Manual Dialog */}
         <UserManual open={showManual} onClose={() => setShowManual(false)} />
+
+        {/* LLM Settings Dialog */}
+        <LLMSettings open={showLLMSettings} onClose={() => setShowLLMSettings(false)} />
       </Container>
     </Box>
   );

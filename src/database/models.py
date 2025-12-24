@@ -41,3 +41,15 @@ class Analysis(Base):
     keywords = Column(JSON)  # Stocke les mots-clés et leurs pondérations
     results = Column(JSON)   # Stocke les résultats de l'analyse
     report = Column(String)  # Stocke le rapport Markdown
+
+
+class LLMSettings(Base):
+    """Modèle pour stocker les paramètres LLM (config globale)"""
+    __tablename__ = "llm_settings"
+
+    id = Column(Integer, primary_key=True, default=1)  # Une seule entrée
+    provider = Column(String, default="ollama")  # 'ollama', 'openai', 'anthropic'
+    api_key = Column(String, default="")  # Clé API (vide pour Ollama)
+    model = Column(String, default="llama3.2")  # Modèle à utiliser
+    ollama_url = Column(String, default="http://localhost:11434")  # URL Ollama
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
