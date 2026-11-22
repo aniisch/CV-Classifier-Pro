@@ -10,7 +10,8 @@ from .llm_adapters import (
     BaseLLMAdapter,
     OllamaAdapter,
     OpenAIAdapter,
-    AnthropicAdapter
+    AnthropicAdapter,
+    AzureOpenAIAdapter
 )
 from .llm_adapters.base_adapter import LLMResponse
 
@@ -24,7 +25,8 @@ class LLMManager:
     PROVIDERS = {
         "ollama": OllamaAdapter,
         "openai": OpenAIAdapter,
-        "anthropic": AnthropicAdapter
+        "anthropic": AnthropicAdapter,
+        "azure_openai": AzureOpenAIAdapter
     }
 
     def __init__(self, db: Session):
@@ -70,6 +72,13 @@ class LLMManager:
                 self._adapter = adapter_class(
                     model=self._settings.model,
                     ollama_url=self._settings.ollama_url
+                )
+            elif provider == "azure_openai":
+                # ollama_url sert d'URL generique (endpoint Azure ici)
+                self._adapter = adapter_class(
+                    api_key=self._settings.api_key,
+                    model=self._settings.model,
+                    endpoint=self._settings.ollama_url
                 )
             else:
                 self._adapter = adapter_class(
@@ -150,7 +159,7 @@ class LLMManager:
         return {
             "provider": settings.provider,
             "model": settings.model,
-            "ollama_url": settings.ollama_url if settings.provider == "ollama" else None,
+            "ollama_url": settings.ollama_url if settings.provider in ("ollama", "azure_openai") else None,
             "has_api_key": bool(settings.api_key) if settings.provider != "ollama" else True
         }
 
@@ -181,6 +190,14 @@ class LLMManager:
                 "requires_api_key": True,
                 "default_model": "claude-sonnet-4-20250514",
                 "models": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"]
+            },
+            {
+                "id": "azure_openai",
+                "name": "Azure OpenAI (Foundry)",
+                "description": "GPT déployé dans votre tenant Azure (Data Zone EU)",
+                "requires_api_key": True,
+                "default_model": "gpt-6.2-sol",
+                "models": ["gpt-6.2-sol", "gpt-6-astra", "gpt-6-luna"]
             }
         ]
 

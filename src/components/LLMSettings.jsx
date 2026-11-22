@@ -53,6 +53,14 @@ const PROVIDERS = [
     requiresApiKey: true,
     defaultModel: 'claude-sonnet-4-20250514',
     models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307']
+  },
+  {
+    id: 'azure_openai',
+    name: 'Azure OpenAI (Foundry)',
+    description: 'GPT déployé dans votre tenant Azure (Data Zone EU)',
+    requiresApiKey: true,
+    defaultModel: 'gpt-6.2-sol',
+    models: ['gpt-6.2-sol', 'gpt-6-astra', 'gpt-6-luna']
   }
 ];
 
@@ -89,7 +97,7 @@ function LLMSettings({ open, onClose }) {
           provider: data.provider || 'ollama',
           api_key: data.api_key || '',
           model: data.model || 'llama3.2',
-          ollama_url: data.ollama_url || 'http://localhost:11434'
+          ollama_url: data.ollama_url ?? 'http://localhost:11434'
         });
       }
     } catch (err) {
@@ -103,12 +111,18 @@ function LLMSettings({ open, onClose }) {
   const handleProviderChange = (event) => {
     const newProvider = event.target.value;
     const providerConfig = PROVIDERS.find(p => p.id === newProvider);
-    setSettings(prev => ({
-      ...prev,
-      provider: newProvider,
-      model: providerConfig?.defaultModel || '',
-      api_key: newProvider === 'ollama' ? '' : prev.api_key
-    }));
+    setSettings(prev => {
+      let ollamaUrl = prev.ollama_url;
+      if (newProvider === 'azure_openai') ollamaUrl = '';
+      else if (newProvider === 'ollama') ollamaUrl = 'http://localhost:11434';
+      return {
+        ...prev,
+        provider: newProvider,
+        model: providerConfig?.defaultModel || '',
+        api_key: newProvider === 'ollama' ? '' : prev.api_key,
+        ollama_url: ollamaUrl
+      };
+    });
     setTestResult(null);
     setAvailableModels([]);
   };
@@ -233,6 +247,27 @@ function LLMSettings({ open, onClose }) {
               </>
             )}
 
+            {/* Azure OpenAI endpoint */}
+            {settings.provider === 'azure_openai' && (
+              <>
+                <TextField
+                  fullWidth
+                  label="Endpoint Azure"
+                  value={settings.ollama_url}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ollama_url: e.target.value }))}
+                  placeholder="https://ma-ressource.openai.azure.com"
+                  helperText="Foundry > ressource > Point de terminaison Azure OpenAI"
+                />
+                <Alert severity="info" icon={<InfoIcon />}>
+                  <Typography variant="body2">
+                    Déployez le modèle en <strong>Data Zone Standard (EUR)</strong> pour que les CV
+                    restent traités dans l'UE. Le champ « Nom du déploiement » doit correspondre
+                    au nom donné au déploiement dans Foundry.
+                  </Typography>
+                </Alert>
+              </>
+            )}
+
             {/* API Key (for OpenAI and Anthropic) */}
             {currentProvider?.requiresApiKey && (
               <TextField
@@ -241,7 +276,11 @@ function LLMSettings({ open, onClose }) {
                 type={showApiKey ? 'text' : 'password'}
                 value={settings.api_key}
                 onChange={(e) => setSettings(prev => ({ ...prev, api_key: e.target.value }))}
-                placeholder={settings.provider === 'openai' ? 'sk-...' : 'sk-ant-...'}
+                placeholder={
+                  settings.provider === 'openai' ? 'sk-...'
+                    : settings.provider === 'azure_openai' ? 'Clé 1 de la ressource Azure'
+                    : 'sk-ant-...'
+                }
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -255,6 +294,15 @@ function LLMSettings({ open, onClose }) {
             )}
 
             {/* Model Selection */}
+            {settings.provider === 'azure_openai' ? (
+              <TextField
+                fullWidth
+                label="Nom du déploiement"
+                value={settings.model}
+                onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
+                placeholder="gpt-6.2-sol"
+              />
+            ) : (
             <FormControl fullWidth>
               <InputLabel>Modele</InputLabel>
               <Select
@@ -274,6 +322,7 @@ function LLMSettings({ open, onClose }) {
                 ))}
               </Select>
             </FormControl>
+            )}
 
             <Divider />
 

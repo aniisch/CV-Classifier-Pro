@@ -19,7 +19,7 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Tro
 - Analyse CVs vs requirements de l'offre
 
 ### Mode IA (LLM)
-- Support multi-provider : Ollama (local), OpenAI, Anthropic
+- Support multi-provider : Ollama (local), OpenAI, Anthropic, Azure OpenAI (Microsoft Foundry)
 - Exécution locale avec Ollama (gratuit, données privées)
 - Analyse intelligente CV vs Offre par l'IA
 - **Rapport avec classement** : tableau de ranking, top 3, synthèse
@@ -122,6 +122,28 @@ Les fichiers de distribution seront dans `out/make/`.
 
 
 
+## Azure OpenAI (Microsoft Foundry)
+
+Le provider **Azure OpenAI (Foundry)** utilise un modèle GPT déployé dans votre propre tenant Azure.
+
+1. Dans le portail Foundry / Azure, ouvrez votre ressource Azure OpenAI.
+2. **Endpoint** : copiez le « Point de terminaison Azure OpenAI » (ex. `https://ma-ressource.openai.azure.com`). Un suffixe `/openai` ou `/openai/v1` est accepté et ignoré.
+3. **Clé** : section « Clés et point de terminaison » → copiez la **Clé 1**.
+4. **Déploiement** : déployez le modèle en **Data Zone Standard (EUR)** pour que les CV restent traités dans l'UE. Dans l'application, le champ « Nom du déploiement » doit être le nom exact du déploiement.
+5. Paramètres > Configuration LLM > provider *Azure OpenAI (Foundry)*, renseignez endpoint, clé et déploiement, puis « Tester la connexion ».
+
+L'endpoint est stocké dans le champ `ollama_url` de la base (champ générique, pas de migration).
+
+Variables d'environnement (optionnelles) :
+
+| Variable | Rôle | Défaut |
+|----------|------|--------|
+| `AZURE_OPENAI_API_KEY` | Clé utilisée si aucune n'est saisie dans l'application | - |
+| `AZURE_OPENAI_ENDPOINT` | Endpoint utilisé si aucun n'est saisi | - |
+| `AZURE_OPENAI_REASONING_EFFORT` | `reasoning_effort` des modèles à raisonnement (`low`, `medium`, `high`) | `medium` |
+| `AZURE_OPENAI_REASONING` | `0` / `1` : force le mode raisonnement (sinon déduit du nom : hors `gpt-4*`, `gpt-35*`, `gpt-3.5*`) | auto |
+| `LLM_CONCURRENCY` | Nombre d'analyses de CV en parallèle | `1` (Ollama), `8` (cloud) |
+
 ## Structure du Projet
 
 ```
@@ -140,6 +162,7 @@ cv-classifier-pro/
 │   │   └── llm_adapters/       # Adaptateurs LLM
 │   │       ├── ollama_adapter.py
 │   │       ├── openai_adapter.py
+│   │       ├── azure_openai_adapter.py
 │   │       └── anthropic_adapter.py
 │   ├── database/
 │   │   ├── models.py           # Modèles SQLAlchemy
@@ -212,7 +235,7 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Splash screen personnalisé
 
 ### Phase 3 - Mode LLM (Terminé)
-- [x] Adaptateurs LLM (Ollama, OpenAI, Anthropic)
+- [x] Adaptateurs LLM (Ollama, OpenAI, Anthropic, Azure OpenAI)
 - [x] Configuration provider et API keys
 - [x] Interface settings LLM
 - [x] LLM Manager (orchestration)

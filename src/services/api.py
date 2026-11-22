@@ -19,6 +19,7 @@ from ..utils.error_handling import (
     DatabaseError,
     FileSystemError
 )
+import asyncio
 import os
 import re
 
@@ -428,7 +429,7 @@ async def analyze_with_job_offer(project_id: str, offer_id: str, request: dict, 
 # ===== LLM SETTINGS ENDPOINTS =====
 
 class LLMSettingsRequest(BaseModel):
-    provider: str = "ollama"  # 'ollama', 'openai', 'anthropic'
+    provider: str = "ollama"  # 'ollama', 'openai', 'anthropic', 'azure_openai' (ollama_url = endpoint Azure)
     api_key: str = ""
     model: str = "llama3.2"
     ollama_url: str = "http://localhost:11434"
@@ -574,6 +575,15 @@ async def test_llm_connection(db: Session = Depends(get_db)):
             except Exception as e:
                 return {"status": "error", "message": f"Erreur de connexion: {str(e)}"}
 
+        elif settings.provider == "azure_openai":
+            from .llm_adapters import AzureOpenAIAdapter
+            adapter = AzureOpenAIAdapter(
+                api_key=settings.api_key,
+                model=settings.model,
+                endpoint=settings.ollama_url
+            )
+            return await adapter.test_connection()
+
         else:
             return {"status": "error", "message": f"Provider inconnu: {settings.provider}"}
 
@@ -657,27 +667,39 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         from .llm_manager import LLMManager
         llm_manager = LLMManager(db)
 
-        results = []
-        for cv in cvs:
-            try:
-                response = await llm_manager.analyze_cv(
-                    cv_content=cv["content"],
-                    job_offer_content=job_offer.raw_content
-                )
-                results.append({
-                    "filename": cv["filename"],
-                    "success": True,
-                    "analysis": response.content,
-                    "model": response.model,
-                    "provider": response.provider,
-                    "tokens": response.usage
-                })
-            except Exception as e:
-                results.append({
-                    "filename": cv["filename"],
-                    "success": False,
-                    "error": str(e)
-                })
+        default_concurrency = 1 if settings.provider == "ollama" else 8
+        try:
+            concurrency = max(1, int(os.environ.get("LLM_CONCURRENCY", default_concurrency)))
+        except ValueError:
+            concurrency = default_concurrency
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def analyze_one(cv):
+            async with semaphore:
+                try:
+                    response = await llm_manager.analyze_cv(
+                        cv_content=cv["content"],
+                        job_offer_content=job_offer.raw_content
+                    )
+                    print(f"[LLM] OK {cv['filename']}")
+                    return {
+                        "filename": cv["filename"],
+                        "success": True,
+                        "analysis": response.content,
+                        "model": response.model,
+                        "provider": response.provider,
+                        "tokens": response.usage
+                    }
+                except Exception as e:
+                    print(f"[LLM] ERREUR {cv['filename']}: {e}")
+                    return {
+                        "filename": cv["filename"],
+                        "success": False,
+                        "error": str(e)
+                    }
+
+        # gather conserve l'ordre des CVs
+        results = list(await asyncio.gather(*(analyze_one(cv) for cv in cvs)))
 
         # 7. Generer le rapport Markdown
         report = generate_llm_report(results, job_offer.filename, settings.provider, settings.model)
