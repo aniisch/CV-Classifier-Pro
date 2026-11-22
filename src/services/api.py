@@ -5,12 +5,13 @@ from typing import Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from ..database.database import get_db
-from ..database.models import Analysis, Project, JobOffer, LLMSettings
+from ..database.database import get_db, engine, SessionLocal
+from ..database.models import Base, Analysis, Project, JobOffer, LLMSettings, LLMJob, LLMJobItem
 from ..database.project_manager import ProjectManager
 from ..database.job_offer_manager import JobOfferManager
 from .cv_analyzer import CVAnalyzer
 from .job_offer_parser import JobOfferParser
+from . import llm_jobs
 from ..utils.error_handling import (
     handle_application_error,
     validate_keywords,
@@ -24,6 +25,17 @@ import os
 import re
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def init_database_and_jobs():
+    """Cree les tables manquantes et marque les lots LLM laisses 'running' comme interrompus."""
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        llm_jobs.mark_interrupted_jobs(db)
+    finally:
+        db.close()
 
 # Configuration CORS
 app.add_middleware(
@@ -632,92 +644,18 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         if not settings:
             raise HTTPException(status_code=400, detail="LLM non configure. Allez dans les parametres.")
 
-        # 5. Lire les CVs (soit tous, soit selection specifique)
-        from PyPDF2 import PdfReader
-        cvs = []
-
-        # Determiner la liste des fichiers a analyser
-        if request.cv_files and len(request.cv_files) > 0:
-            # Mode selection: utiliser uniquement les fichiers specifies
-            files_to_analyze = request.cv_files
-        else:
-            # Mode tous: scanner tout le dossier
-            files_to_analyze = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
-
-        for filename in files_to_analyze:
-            if filename.lower().endswith('.pdf'):
-                filepath = os.path.join(folder_path, filename)
-                if not os.path.exists(filepath):
-                    print(f"Fichier non trouve: {filepath}")
-                    continue
-                try:
-                    reader = PdfReader(filepath)
-                    text = ""
-                    for page in reader.pages:
-                        text += page.extract_text() or ""
-                    if text.strip():
-                        cvs.append({"filename": filename, "content": text})
-                except Exception as e:
-                    print(f"Erreur lecture {filename}: {e}")
-
-        if not cvs:
+        # 5. Lister les CVs (la lecture des PDF se fait dans le job, hors boucle asyncio)
+        filenames = llm_jobs.list_pdf_files(folder_path, request.cv_files)
+        if not filenames:
             raise HTTPException(status_code=400, detail="Aucun CV valide trouve dans le dossier")
 
-        # 6. Creer le LLM Manager et analyser
-        from .llm_manager import LLMManager
-        llm_manager = LLMManager(db)
-
-        default_concurrency = 1 if settings.provider == "ollama" else 8
-        try:
-            concurrency = max(1, int(os.environ.get("LLM_CONCURRENCY", default_concurrency)))
-        except ValueError:
-            concurrency = default_concurrency
-        semaphore = asyncio.Semaphore(concurrency)
-
-        async def analyze_one(cv):
-            async with semaphore:
-                try:
-                    response = await llm_manager.analyze_cv(
-                        cv_content=cv["content"],
-                        job_offer_content=job_offer.raw_content
-                    )
-                    print(f"[LLM] OK {cv['filename']}")
-                    return {
-                        "filename": cv["filename"],
-                        "success": True,
-                        "analysis": response.content,
-                        "model": response.model,
-                        "provider": response.provider,
-                        "tokens": response.usage
-                    }
-                except Exception as e:
-                    print(f"[LLM] ERREUR {cv['filename']}: {e}")
-                    return {
-                        "filename": cv["filename"],
-                        "success": False,
-                        "error": str(e)
-                    }
-
-        # gather conserve l'ordre des CVs
-        results = list(await asyncio.gather(*(analyze_one(cv) for cv in cvs)))
-
-        # 7. Generer le rapport Markdown
-        report = generate_llm_report(results, job_offer.filename, settings.provider, settings.model)
-
-        # 8. Sauvegarder l'analyse
-        analysis = Analysis(
-            project_id=project_id,
-            job_offer_id=request.job_offer_id,
-            date=datetime.now(),
-            report=report,
-            keywords={"mode": "llm", "provider": settings.provider, "model": settings.model},
-            folder_path=folder_path,
-            results=results
+        # 6. Creer le lot et le lancer en arriere-plan
+        job = llm_jobs.create_job(
+            db, project_id, request.job_offer_id, folder_path, filenames,
+            settings.provider, settings.model
         )
-        db.add(analysis)
-        db.commit()
-
-        return {"report": report, "results": results}
+        llm_jobs.start_job(job.id, generate_llm_report)
+        return llm_jobs.job_to_dict(db, job)
 
     except HTTPException:
         raise
@@ -726,6 +664,82 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         print(f"ERROR in analyze_with_llm: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== LLM JOBS (suivi, reprise, annulation) =====
+
+def _get_job_or_404(db: Session, job_id: str) -> LLMJob:
+    job = db.get(LLMJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Lot d'analyse non trouve")
+    return job
+
+
+@app.get("/api/llm-jobs/{job_id}")
+async def get_llm_job(job_id: str, db: Session = Depends(get_db)):
+    """Progression d'un lot ; inclut report et results une fois termine."""
+    job = _get_job_or_404(db, job_id)
+    data = llm_jobs.job_to_dict(db, job)
+    if data["status"] == "completed" and job.analysis_id:
+        analysis = db.get(Analysis, job.analysis_id)
+        if analysis:
+            data["report"] = analysis.report
+            data["results"] = analysis.results
+    return data
+
+
+@app.get("/api/projects/{project_id}/llm-jobs")
+async def list_unfinished_llm_jobs(project_id: str, db: Session = Depends(get_db)):
+    """Lots a traiter : en cours, interrompus, annules, en erreur, ou termines avec des CVs en erreur."""
+    jobs = (
+        db.query(LLMJob)
+        .filter(LLMJob.project_id == project_id)
+        .order_by(LLMJob.created_at.desc())
+        .all()
+    )
+    result = []
+    for j in jobs:
+        data = llm_jobs.job_to_dict(db, j)
+        if j.status in llm_jobs.ACTIVE_STATUSES or (j.status == "completed" and data["error"] > 0):
+            result.append(data)
+    return result
+
+
+@app.post("/api/llm-jobs/{job_id}/resume")
+async def resume_llm_job(job_id: str, db: Session = Depends(get_db)):
+    """Reprend un lot : relance les CVs non traites et ceux en erreur."""
+    job = _get_job_or_404(db, job_id)
+    if llm_jobs.is_running(job_id):
+        raise HTTPException(status_code=409, detail="Ce lot est deja en cours")
+    db.query(LLMJobItem).filter(
+        LLMJobItem.job_id == job_id, LLMJobItem.status == "error"
+    ).update({"status": "pending", "result": None})
+    job.status = "running"
+    job.error = ""
+    db.commit()
+    llm_jobs.start_job(job_id, generate_llm_report)
+    return llm_jobs.job_to_dict(db, job)
+
+
+@app.post("/api/llm-jobs/{job_id}/cancel")
+async def cancel_llm_job(job_id: str, db: Session = Depends(get_db)):
+    """Annule un lot en cours ; les resultats deja obtenus sont conserves."""
+    job = _get_job_or_404(db, job_id)
+    await llm_jobs.cancel_job(job_id)
+    db.refresh(job)
+    return llm_jobs.job_to_dict(db, job)
+
+
+@app.delete("/api/llm-jobs/{job_id}")
+async def delete_llm_job(job_id: str, db: Session = Depends(get_db)):
+    """Abandonne un lot non termine (supprime le lot et ses items)."""
+    job = _get_job_or_404(db, job_id)
+    if llm_jobs.is_running(job_id):
+        raise HTTPException(status_code=409, detail="Annulez le lot avant de le supprimer")
+    db.query(LLMJobItem).filter(LLMJobItem.job_id == job_id).delete()
+    db.delete(job)
+    db.commit()
+    return {"message": "Lot supprime"}
 
 
 def parse_llm_response(analysis_text: str) -> dict:
