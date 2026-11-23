@@ -27,7 +27,7 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Tro
 - **Sélection de CVs** : tous, top N, ou sélection manuelle
 
 ### Général
-- Base de données locale SQLite
+- Base de données locale SQLite : en application installée ou portable, elle est stockée dans `%APPDATA%\CV Classifier Pro\data\cv_analyzer.db` (conservée entre les versions et les copies de l'exe) ; en développement, dans `data/` du dépôt. Variable `CV_CLASSIFIER_DATA_DIR` pour changer le dossier.
 - Interface Material-UI intuitive
 - Manuel d'utilisation intégré
 - Splash screen personnalisé
