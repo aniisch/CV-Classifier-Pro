@@ -1,16 +1,68 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Paper,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
+  Button,
   IconButton,
   Tooltip,
   Typography
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
+const PAGE_SIZE = 20;
+// Au-dela, les analyses detaillees sont repliees et rendues a la demande
+// (400 analyses rendues d'un coup bloquent l'interface).
+const LAZY_THRESHOLD = 25;
+const DETAILS_HEADING = '## 📄 Analyses Détaillées';
+const ERRORS_HEADING = '\n## ⚠️ Erreurs';
+
+const markdownComponents = {
+  h1: ({ node, ...props }) => <Typography variant="h4" gutterBottom {...props} />,
+  h2: ({ node, ...props }) => <Typography variant="h5" gutterBottom {...props} />,
+  p: ({ node, ...props }) => <Typography variant="body1" paragraph {...props} />,
+  li: ({ node, ...props }) => <Typography component="li" variant="body1" {...props} />,
+};
+
+const ReportMarkdown = ({ children }) => (
+  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+    {children}
+  </ReactMarkdown>
+);
+
+// Decoupe le rapport : synthese, analyses detaillees (une entree par CV), erreurs.
+const splitReport = (report) => {
+  const detailsStart = report.indexOf(DETAILS_HEADING);
+  if (detailsStart === -1) return { head: report, items: [], tail: '' };
+  const afterHeading = detailsStart + DETAILS_HEADING.length;
+  const errorsStart = report.indexOf(ERRORS_HEADING, afterHeading);
+  const detailsEnd = errorsStart === -1 ? report.length : errorsStart;
+  const items = report
+    .slice(afterHeading, detailsEnd)
+    .split(/(?=^### \d+\. )/m)
+    .map((chunk) => chunk.replace(/\n---\s*$/, '').trim())
+    .filter(Boolean)
+    .map((chunk, index) => ({
+      key: index,
+      title: chunk.split('\n', 1)[0].replace(/^###\s*/, ''),
+      body: chunk.split('\n').slice(1).join('\n'),
+    }));
+  if (items.length <= LAZY_THRESHOLD) return { head: report, items: [], tail: '' };
+  return {
+    head: report.slice(0, afterHeading),
+    items,
+    tail: errorsStart === -1 ? '' : report.slice(errorsStart),
+  };
+};
+
 const AnalysisReport = ({ report, onExportPDF }) => {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sections = useMemo(() => splitReport(report || ''), [report]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [report]);
   if (!report) return null;
 
   return (
@@ -101,25 +153,25 @@ const AnalysisReport = ({ report, onExportPDF }) => {
           }
         }}
       >
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            h1: ({ node, ...props }) => (
-              <Typography variant="h4" gutterBottom {...props} />
-            ),
-            h2: ({ node, ...props }) => (
-              <Typography variant="h5" gutterBottom {...props} />
-            ),
-            p: ({ node, ...props }) => (
-              <Typography variant="body1" paragraph {...props} />
-            ),
-            li: ({ node, ...props }) => (
-              <Typography component="li" variant="body1" {...props} />
-            ),
-          }}
-        >
-          {report}
-        </ReactMarkdown>
+        {sections.head && <ReportMarkdown>{sections.head}</ReportMarkdown>}
+        {sections.items.slice(0, visibleCount).map((item) => (
+          <Accordion key={item.key} disableGutters TransitionProps={{ unmountOnExit: true }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="subtitle1">{item.title}</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <ReportMarkdown>{item.body}</ReportMarkdown>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+        {sections.items.length > visibleCount && (
+          <Box sx={{ textAlign: 'center', my: 2 }}>
+            <Button onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}>
+              Afficher plus ({sections.items.length - visibleCount} restants)
+            </Button>
+          </Box>
+        )}
+        {sections.tail && <ReportMarkdown>{sections.tail}</ReportMarkdown>}
       </Box>
     </Box>
   );

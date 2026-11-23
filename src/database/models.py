@@ -48,8 +48,38 @@ class LLMSettings(Base):
     __tablename__ = "llm_settings"
 
     id = Column(Integer, primary_key=True, default=1)  # Une seule entrée
-    provider = Column(String, default="ollama")  # 'ollama', 'openai', 'anthropic'
+    provider = Column(String, default="ollama")  # 'ollama', 'openai', 'anthropic', 'azure_openai'
     api_key = Column(String, default="")  # Clé API (vide pour Ollama)
     model = Column(String, default="llama3.2")  # Modèle à utiliser
     ollama_url = Column(String, default="http://localhost:11434")  # URL Ollama
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class LLMJob(Base):
+    """Lot d'analyse LLM execute en arriere-plan (progression + reprise)."""
+    __tablename__ = "llm_jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    project_id = Column(String, ForeignKey('projects.id'), nullable=False)
+    job_offer_id = Column(String, ForeignKey('job_offers.id'), nullable=False)
+    folder_path = Column(String, nullable=False)
+    provider = Column(String, default="")
+    model = Column(String, default="")
+    # 'running', 'completed', 'cancelled', 'interrupted', 'failed'
+    status = Column(String, default="running")
+    error = Column(String, default="")
+    analysis_id = Column(Integer, ForeignKey('analyses.id'), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class LLMJobItem(Base):
+    """Un CV d'un lot LLM. Le resultat est sauvegarde des qu'il est disponible."""
+    __tablename__ = "llm_job_items"
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(String, ForeignKey('llm_jobs.id', ondelete="CASCADE"), nullable=False, index=True)
+    position = Column(Integer, nullable=False)
+    filename = Column(String, nullable=False)
+    status = Column(String, default="pending")  # 'pending', 'ok', 'error'
+    result = Column(JSON, nullable=True)  # meme format que les anciens results

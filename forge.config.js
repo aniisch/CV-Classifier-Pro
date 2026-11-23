@@ -18,7 +18,13 @@ module.exports = {
       /\.md$/,
       /\.log$/,
       /^\/build$/,
-      /\.spec$/
+      /\.spec$/,
+      // Sorties de build et donnees locales : ne jamais les embarquer dans app.asar
+      /^\/release/,
+      /^\/data/,
+      /^\/tests/,
+      /^\/\.github/,
+      /^\/dist\/backend\.exe$/
     ],
     // Fichiers supplémentaires à inclure (backend.exe sera ici)
     extraResource: [

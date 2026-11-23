@@ -27,7 +27,7 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Tro
 - **Sélection de CVs** : tous, top N, ou sélection manuelle
 
 ### Général
-- Base de données locale SQLite
+- Base de données locale SQLite : en application installée ou portable, elle est stockée dans `%APPDATA%\CV Classifier Pro\data\cv_analyzer.db` (conservée entre les versions et les copies de l'exe) ; en développement, dans `data/` du dépôt. Variable `CV_CLASSIFIER_DATA_DIR` pour changer le dossier.
 - Interface Material-UI intuitive
 - Manuel d'utilisation intégré
 - Splash screen personnalisé
@@ -199,7 +199,12 @@ cv-classifier-pro/
 | PUT | /api/job-offers/{id} | Modifie les requirements |
 | DELETE | /api/job-offers/{id} | Supprime une offre |
 | POST | /api/projects/{id}/analyze-offer/{offer_id} | Analyse avec offre |
-| POST | /api/projects/{id}/analyze-llm | Analyse IA (LLM) |
+| POST | /api/projects/{id}/analyze-llm | Lance une analyse IA en arrière-plan (renvoie le lot et sa progression) |
+| GET | /api/llm-jobs/{id} | Progression du lot (`done/total`) ; `report` et `results` une fois terminé |
+| GET | /api/projects/{id}/llm-jobs | Lots à reprendre (interrompus, annulés, ou terminés avec erreurs) |
+| POST | /api/llm-jobs/{id}/resume | Reprend un lot (CVs non traités ou en erreur) |
+| POST | /api/llm-jobs/{id}/cancel | Annule un lot (résultats déjà obtenus conservés) |
+| DELETE | /api/llm-jobs/{id} | Abandonne un lot |
 | GET | /api/llm-settings | Récupère la config LLM |
 | PUT | /api/llm-settings | Met à jour la config LLM |
 | GET | /api/llm-settings/test | Teste la connexion LLM |
@@ -249,7 +254,7 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Parsing automatique scores et recommandations
 
 ### Optimisations futures
-- [ ] Queue/Worker pour gros batches
+- [x] Queue/Worker pour gros batches (v3.3.0 : analyses IA en arrière-plan, progression, reprise)
 - [ ] Tests unitaires
 - [ ] CI/CD pipeline
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiUrl } from '../config';
 import {
   Box,
@@ -25,7 +25,8 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Collapse
+  Collapse,
+  LinearProgress
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import SendIcon from '@mui/icons-material/Send';
@@ -52,6 +53,136 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
   const [topNCount, setTopNCount] = useState(3);
   const [selectedCvs, setSelectedCvs] = useState([]); // Pour selection manuelle
   const [showCvList, setShowCvList] = useState(false);
+
+  // Lot LLM en arriere-plan : progression, reprise
+  const [job, setJob] = useState(null); // lot suivi (progression)
+  const [unfinishedJobs, setUnfinishedJobs] = useState([]); // lots interrompus / annules / en erreur
+  const pollTimer = useRef(null);
+  const mounted = useRef(true);
+  const onCompleteRef = useRef(onAnalysisComplete);
+  onCompleteRef.current = onAnalysisComplete;
+
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  const loadUnfinishedJobs = useCallback(async () => {
+    if (!project?.id) return [];
+    try {
+      const response = await fetch(apiUrl(`/api/projects/${project.id}/llm-jobs`));
+      if (!response.ok) return [];
+      const jobs = await response.json();
+      if (mounted.current) setUnfinishedJobs(jobs.filter((j) => j.status !== 'running'));
+      return jobs;
+    } catch (err) {
+      console.error('Erreur chargement des lots:', err);
+      return [];
+    }
+  }, [project?.id]);
+
+  const pollJob = useCallback((jobId) => {
+    stopPolling();
+    const tick = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/llm-jobs/${jobId}`));
+        if (!response.ok) throw new Error('Lot introuvable');
+        const data = await response.json();
+        if (!mounted.current) return;
+        if (data.status === 'running') {
+          setJob(data);
+          pollTimer.current = setTimeout(tick, 2000);
+          return;
+        }
+        setJob(null);
+        setLoading(false);
+        if (data.status === 'completed') {
+          onCompleteRef.current?.({ report: data.report, results: data.results });
+        } else {
+          onCompleteRef.current?.(null);
+          if (data.status === 'failed') {
+            setError(data.job_error || 'Le lot a echoue');
+          }
+          loadUnfinishedJobs();
+        }
+      } catch (err) {
+        if (!mounted.current) return;
+        // Erreur reseau transitoire : on reessaie
+        pollTimer.current = setTimeout(tick, 4000);
+      }
+    };
+    tick();
+  }, [stopPolling, loadUnfinishedJobs]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stopPolling();
+    };
+  }, [stopPolling]);
+
+  // Au montage : rattacher un lot encore en cours, proposer la reprise des autres
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const jobs = await loadUnfinishedJobs();
+      const running = jobs.find((j) => j.status === 'running');
+      if (!cancelled && running) {
+        setAnalysisMode('llm');
+        setLoading(true);
+        setJob(running);
+        pollJob(running.id);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadUnfinishedJobs, pollJob]);
+
+  const handleCancelJob = async () => {
+    if (!job) return;
+    stopPolling();
+    try {
+      await fetch(apiUrl(`/api/llm-jobs/${job.id}/cancel`), { method: 'POST' });
+    } catch (err) {
+      setError('Erreur lors de l\'annulation');
+    }
+    setJob(null);
+    setLoading(false);
+    onCompleteRef.current?.(null);
+    loadUnfinishedJobs();
+  };
+
+  const handleResumeJob = async (jobId) => {
+    setError('');
+    try {
+      const response = await fetch(apiUrl(`/api/llm-jobs/${jobId}/resume`), { method: 'POST' });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erreur lors de la reprise');
+      }
+      const data = await response.json();
+      setUnfinishedJobs((jobs) => jobs.filter((j) => j.id !== jobId));
+      setLoading(true);
+      onAnalysisStart?.();
+      setJob(data);
+      pollJob(data.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDiscardJob = async (jobId) => {
+    try {
+      await fetch(apiUrl(`/api/llm-jobs/${jobId}`), { method: 'DELETE' });
+    } catch (err) {
+      setError('Erreur lors de la suppression du lot');
+    }
+    setUnfinishedJobs((jobs) => jobs.filter((j) => j.id !== jobId));
+  };
 
   // Verifier si LLM est configure
   useEffect(() => {
@@ -218,13 +349,18 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
       }
 
       const data = await response.json();
+      if (analysisMode === 'llm') {
+        // Lot cree : le suivi se fait par polling, loading reste actif
+        setJob(data);
+        pollJob(data.id);
+        return;
+      }
       onAnalysisComplete(data);
     } catch (error) {
       setError(error.message);
       onAnalysisComplete(null);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const handleBrowseFolder = async () => {
@@ -539,14 +675,56 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
           </Box>
         )}
 
+        {/* Lots interrompus : reprise ou abandon */}
+        {!job && unfinishedJobs.map((j) => (
+          <Alert
+            key={j.id}
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={
+              <Stack direction="row" spacing={1}>
+                <Button color="inherit" size="small" onClick={() => handleResumeJob(j.id)}>
+                  Reprendre
+                </Button>
+                <Button color="inherit" size="small" onClick={() => handleDiscardJob(j.id)}>
+                  Abandonner
+                </Button>
+              </Stack>
+            }
+          >
+            Lot d'analyse IA {{ failed: 'en erreur', completed: 'terminé avec des erreurs', cancelled: 'annulé' }[j.status] || 'interrompu'} : {j.done}/{j.total} CVs traités
+            {j.error > 0 ? ` (${j.error} en erreur)` : ''}.
+          </Alert>
+        ))}
+
+        {/* Progression du lot LLM */}
+        {job && (
+          <Box sx={{ mb: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+              <Typography variant="body2">
+                Analyse IA : {job.done}/{job.total} CVs
+                {job.error > 0 ? ` (${job.error} en erreur)` : ''}
+              </Typography>
+              <Button size="small" color="error" onClick={handleCancelJob}>
+                Annuler
+              </Button>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={job.total ? (job.done / job.total) * 100 : 0}
+            />
+          </Box>
+        )}
+
         {/* Info mode LLM */}
-        {analysisMode === 'llm' && selectedJobOfferId && (
+        {analysisMode === 'llm' && selectedJobOfferId && !job && (
           <Alert severity="info" sx={{ mb: 2 }}>
             {cvSelectionMode === 'all'
               ? "L'IA va analyser tous les CVs du dossier."
               : `L'IA va analyser ${selectedCvs.length} CV(s) sélectionné(s).`
             }
-            {' '}Cette analyse peut prendre quelques minutes.
+            {' '}L'analyse tourne en arrière-plan : chaque résultat est sauvegardé dès qu'il arrive
+            et un lot interrompu peut être repris.
           </Alert>
         )}
 
