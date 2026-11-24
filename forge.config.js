@@ -21,6 +21,8 @@ module.exports = {
       /\.spec$/,
       // Sorties de build et donnees locales : ne jamais les embarquer dans app.asar
       /^\/release/,
+      /^\/build_release\.py$/,
+      /^\/build_backend\.py$/,
       /^\/data/,
       /^\/tests/,
       /^\/\.github/,

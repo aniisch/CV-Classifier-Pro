@@ -115,7 +115,7 @@ function createSplashWindow() {
       splashWindow = null;
     });
 
-    splashWindow.loadFile(splashPath);
+    splashWindow.loadFile(splashPath, { query: { version: app.getVersion() } });
   });
 }
 
