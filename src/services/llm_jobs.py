@@ -15,7 +15,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database.database import SessionLocal
-from ..database.models import Analysis, JobOffer, LLMJob, LLMJobItem
+from .wtj_import import build_candidate_context, candidate_to_dict
+from ..database.models import Analysis, JobOffer, LLMJob, LLMJobItem, WtjCandidate
 
 ACTIVE_STATUSES = ("running", "cancelled", "interrupted", "failed")
 
@@ -62,6 +63,7 @@ def create_job(
     filenames: List[str],
     provider: str,
     model: str,
+    custom_prompt: str = "",
 ) -> LLMJob:
     """Cree le lot et ses items (tous 'pending')."""
     job = LLMJob(
@@ -70,6 +72,7 @@ def create_job(
         folder_path=folder_path,
         provider=provider,
         model=model,
+        custom_prompt=(custom_prompt or "").strip(),
         status="running",
     )
     db.add(job)
@@ -81,6 +84,29 @@ def create_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def build_context(custom_prompt: str, candidate: Optional[WtjCandidate]) -> Optional[str]:
+    """Combine the per-run custom prompt and the WTJ data of a candidate.
+
+    Args:
+        custom_prompt: Recruiter instructions for this run (may be empty).
+        candidate: WTJ data matching the CV, if any.
+
+    Returns:
+        The extra prompt context, or None when there is nothing to add.
+    """
+    parts = []
+    if custom_prompt:
+        parts.append(f"INSTRUCTIONS DU RECRUTEUR (prioritaires) :\n{custom_prompt}")
+    if candidate is not None:
+        parts.append(build_candidate_context(candidate))
+        if not custom_prompt:
+            parts.append(
+                "Compare ces donnees et les reponses du candidat avec son CV et l'offre ; "
+                "signale toute incoherence."
+            )
+    return "\n\n".join(parts) or None
 
 
 def get_progress(db: Session, job_id: str) -> Dict[str, int]:
@@ -191,6 +217,14 @@ async def run_job(
         offer_content = offer.raw_content or ""
         folder_path = job.folder_path
         provider = job.provider
+        custom_prompt = job.custom_prompt or ""
+        candidates = {
+            c.cv_fichier: c
+            for c in db.query(WtjCandidate).filter(WtjCandidate.project_id == job.project_id)
+        }
+        contexts = {name: build_context(custom_prompt, c) for name, c in candidates.items()}
+        default_context = build_context(custom_prompt, None)
+        wtj_data = {name: candidate_to_dict(c) for name, c in candidates.items()}
         job.status = "running"
         job.error = ""
         db.commit()
@@ -237,7 +271,9 @@ async def run_job(
                 text = await asyncio.to_thread(extract_fn, filepath)
                 if not text.strip():
                     raise ValueError("Aucun texte extractible (PDF scanne ou vide)")
-                response = await manager.analyze_cv(cv_content=text, job_offer_content=offer_content)
+                response = await manager.analyze_cv(cv_content=text, job_offer_content=offer_content,
+                    additional_context=contexts.get(filename, default_context),
+                )
                 print(f"[LLM] OK {filename}")
                 save(item_id, "ok", {
                     "filename": filename,
@@ -246,6 +282,7 @@ async def run_job(
                     "model": response.model,
                     "provider": response.provider,
                     "tokens": response.usage,
+                    **({"wtj": wtj_data[filename]} if filename in wtj_data else {}),
                 })
             except asyncio.CancelledError:
                 raise

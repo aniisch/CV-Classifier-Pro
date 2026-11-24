@@ -22,7 +22,11 @@ Application desktop multi-projets pour l'analyse et la classification de CV. Tro
 - Support multi-provider : Ollama (local), OpenAI, Anthropic, Azure OpenAI (Microsoft Foundry)
 - Exécution locale avec Ollama (gratuit, données privées)
 - Analyse intelligente CV vs Offre par l'IA
-- **Rapport avec classement** : tableau de ranking, top 3, synthèse
+- **Rapport avec classement** : tableau de ranking, Top 10 avec avis court, analyses détaillées repliables
+- **Import CSV Welcome to the Jungle** : les données du candidat (expérience, réponses aux questions) sont transmises à l'IA, qui donne aussi son avis sur les réponses
+- **Fourchette d'expérience** (min/max) : filtre les CVs avant l'analyse grâce au CSV WTJ
+- **Instructions personnalisées** : un prompt libre, propre à chaque lancement (fonctionne aussi sans CSV)
+- **Exports** : HTML autonome (accordéons, recherche), Excel du classement, PDF résumé (classement + Top 10)
 - Score de correspondance, points forts/faibles, recommandation
 - **Sélection de CVs** : tous, top N, ou sélection manuelle
 
@@ -205,7 +209,10 @@ cv-classifier-pro/
 | POST | /api/llm-jobs/{id}/resume | Reprend un lot (CVs non traités ou en erreur) |
 | POST | /api/llm-jobs/{id}/cancel | Annule un lot (résultats déjà obtenus conservés) |
 | DELETE | /api/llm-jobs/{id} | Abandonne un lot |
-| GET | /api/llm-settings | Récupère la config LLM |
+| GET | /api/analyses/{id}/export/{html\|xlsx\|pdf} | Exporte une analyse IA |
+| POST | /api/projects/{id}/wtj-import | Importe un CSV Welcome to the Jungle |
+| GET / DELETE | /api/projects/{id}/wtj-candidates | Liste / supprime les candidats WTJ importés |
+| GET | /api/llm-settings | Récupère la config LLM (clé API masquée) |
 | PUT | /api/llm-settings | Met à jour la config LLM |
 | GET | /api/llm-settings/test | Teste la connexion LLM |
 | GET | /api/health | Health check |
@@ -252,6 +259,12 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Top 3 profils avec résumé
 - [x] Sélection de CVs (tous / Top N / manuel)
 - [x] Parsing automatique scores et recommandations
+
+### Phase 3.2 - Import WTJ et exports (v3.4.0)
+- [x] Import CSV WTJ, fourchette d'expérience, instructions personnalisées par lancement
+- [x] Top 10 avec avis court, avis sur les réponses
+- [x] Exports HTML / Excel / PDF résumé
+- [x] Clé API masquée dans l'API, `data/` et `*.db` ignorés par git
 
 ### Optimisations futures
 - [x] Queue/Worker pour gros batches (v3.3.0 : analyses IA en arrière-plan, progression, reprise)

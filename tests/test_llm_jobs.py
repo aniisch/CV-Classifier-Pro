@@ -211,3 +211,31 @@ def test_list_pdf_files_filters_and_dedups(tmp_path):
     (tmp_path / "n.txt").write_text("x")
     assert llm_jobs.list_pdf_files(str(tmp_path)) == ["a.PDF", "b.pdf"]
     assert llm_jobs.list_pdf_files(str(tmp_path), ["z.pdf", "z.pdf", "y.txt"]) == ["z.pdf"]
+
+
+def test_build_context():
+    from src.database.models import WtjCandidate
+
+    cand = WtjCandidate(project_id="p1", cv_fichier="a.pdf", years_exp=5.0, exp_ok=False,
+                        extra={"rep_projet": "CUBIA"})
+    assert llm_jobs.build_context("", None) is None
+    assert "INSTRUCTIONS DU RECRUTEUR" in llm_jobs.build_context("Azure", None)
+    ctx = llm_jobs.build_context("Azure", cand)
+    assert "CUBIA" in ctx and "exp_ok" in ctx and "Compare" not in ctx
+    assert "Compare" in llm_jobs.build_context("", cand)
+
+
+def test_generate_llm_report_top10_and_wtj():
+    from src.services.api import extract_short_opinion, generate_llm_report
+
+    def res(i):
+        return {"filename": f"c{i}.pdf", "success": True,
+                "analysis": f"SCORE: {90 - i}/100\nRECOMMANDATION: RETENIR\n## Avis court\nBon profil {i}\n",
+                "wtj": {"years_exp": 2.0, "wtj_url": f"http://w/{i}"}}
+
+    report = generate_llm_report([res(i) for i in range(12)], "offre.pdf", "p", "m")
+    assert "### Top 10 des profils" in report and "Bon profil 9" in report
+    assert "Bon profil 10" not in report.split("## Analyses")[0]
+    assert "| Exp. (ans) | WTJ |" in report and "[WTJ](http://w/0)" in report
+    assert "### 1. " not in report and "📊" not in report
+    assert extract_short_opinion("## Resume du Profil\nAbc") == "Abc"

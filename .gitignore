@@ -176,3 +176,8 @@ cvs/*
 node_modules
 exports/*
 
+# Donnees locales (bases SQLite, cles API)
+data/
+*.db
+*.db-journal
+*.sqlite3

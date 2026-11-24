@@ -6,6 +6,8 @@ import {
   Box,
   Button,
   IconButton,
+  Menu,
+  MenuItem,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -15,11 +17,20 @@ import remarkGfm from 'remark-gfm';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 const PAGE_SIZE = 20;
-// Au-dela, les analyses detaillees sont repliees et rendues a la demande
+// Au-dela, les analyses detaillees sont repliees (une par CV) et rendues a la demande
 // (400 analyses rendues d'un coup bloquent l'interface).
-const LAZY_THRESHOLD = 25;
-const DETAILS_HEADING = '## 📄 Analyses Détaillées';
-const ERRORS_HEADING = '\n## ⚠️ Erreurs';
+const LAZY_THRESHOLD = 10;
+// Les anciens rapports utilisent des emojis dans les titres.
+const DETAILS_HEADINGS = ['## Analyses Détaillées', '## 📄 Analyses Détaillées'];
+const ERRORS_HEADINGS = ['\n## Erreurs', '\n## ⚠️ Erreurs'];
+
+const findHeading = (text, headings, from = 0) => {
+  for (const heading of headings) {
+    const index = text.indexOf(heading, from);
+    if (index !== -1) return { index, length: heading.length };
+  }
+  return null;
+};
 
 const markdownComponents = {
   h1: ({ node, ...props }) => <Typography variant="h4" gutterBottom {...props} />,
@@ -36,14 +47,15 @@ const ReportMarkdown = ({ children }) => (
 
 // Decoupe le rapport : synthese, analyses detaillees (une entree par CV), erreurs.
 const splitReport = (report) => {
-  const detailsStart = report.indexOf(DETAILS_HEADING);
-  if (detailsStart === -1) return { head: report, items: [], tail: '' };
-  const afterHeading = detailsStart + DETAILS_HEADING.length;
-  const errorsStart = report.indexOf(ERRORS_HEADING, afterHeading);
+  const details = findHeading(report, DETAILS_HEADINGS);
+  if (!details) return { head: report, items: [], tail: '' };
+  const afterHeading = details.index + details.length;
+  const errors = findHeading(report, ERRORS_HEADINGS, afterHeading);
+  const errorsStart = errors ? errors.index : -1;
   const detailsEnd = errorsStart === -1 ? report.length : errorsStart;
   const items = report
     .slice(afterHeading, detailsEnd)
-    .split(/(?=^### \d+\. )/m)
+    .split(/(?=^### )/m)
     .map((chunk) => chunk.replace(/\n---\s*$/, '').trim())
     .filter(Boolean)
     .map((chunk, index) => ({
@@ -59,7 +71,8 @@ const splitReport = (report) => {
   };
 };
 
-const AnalysisReport = ({ report, onExportPDF }) => {
+const AnalysisReport = ({ report, onExportPDF, onExportFile }) => {
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sections = useMemo(() => splitReport(report || ''), [report]);
   useEffect(() => setVisibleCount(PAGE_SIZE), [report]);
@@ -75,15 +88,32 @@ const AnalysisReport = ({ report, onExportPDF }) => {
           zIndex: 2
         }}
       >
-        <Tooltip title="Exporter en PDF">
+        <Tooltip title="Exporter">
           <IconButton
-            onClick={onExportPDF}
+            onClick={(e) => (onExportFile ? setMenuAnchor(e.currentTarget) : onExportPDF())}
             color="primary"
             size="large"
           >
             <FileDownloadIcon />
           </IconButton>
         </Tooltip>
+        <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+          {[
+            ['html', 'Rapport HTML (interactif)'],
+            ['xlsx', 'Classement Excel'],
+            ['pdf', 'PDF résumé (classement + top 10)'],
+          ].map(([format, label]) => (
+            <MenuItem
+              key={format}
+              onClick={() => {
+                setMenuAnchor(null);
+                onExportFile(format);
+              }}
+            >
+              {label}
+            </MenuItem>
+          ))}
+        </Menu>
       </Box>
 
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 3, pr: 8 }}>

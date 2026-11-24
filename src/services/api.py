@@ -1,17 +1,24 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, validator
 from typing import Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..database.database import get_db, engine, SessionLocal
-from ..database.models import Base, Analysis, Project, JobOffer, LLMSettings, LLMJob, LLMJobItem
+from ..database.models import Base, Analysis, Project, JobOffer, LLMSettings, LLMJob, LLMJobItem, WtjCandidate
 from ..database.project_manager import ProjectManager
 from ..database.job_offer_manager import JobOfferManager
 from .cv_analyzer import CVAnalyzer
 from .job_offer_parser import JobOfferParser
-from . import llm_jobs
+from . import llm_jobs, report_export, wtj_import
+from .report_export import (
+    extract_short_opinion,
+    get_recommendation_emoji,
+    get_recommendation_label,
+    parse_llm_response,
+)
 from ..utils.error_handling import (
     handle_application_error,
     validate_keywords,
@@ -27,10 +34,19 @@ import re
 app = FastAPI()
 
 
+def _ensure_columns() -> None:
+    """Ajoute les colonnes apparues apres la creation de la base (create_all ne le fait pas)."""
+    from sqlalchemy import inspect, text
+    if "custom_prompt" not in {c["name"] for c in inspect(engine).get_columns("llm_jobs")}:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE llm_jobs ADD COLUMN custom_prompt VARCHAR DEFAULT ''"))
+
+
 @app.on_event("startup")
 def init_database_and_jobs():
     """Cree les tables manquantes et marque les lots LLM laisses 'running' comme interrompus."""
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()
     db = SessionLocal()
     try:
         llm_jobs.mark_interrupted_jobs(db)
@@ -447,6 +463,35 @@ class LLMSettingsRequest(BaseModel):
     ollama_url: str = "http://localhost:11434"
 
 
+API_KEY_MASK = "****"
+
+
+def mask_api_key(api_key: str) -> str:
+    """Return the key masked for the UI: only the last 4 characters stay visible.
+
+    Args:
+        api_key: The stored API key.
+
+    Returns:
+        An empty string if no key, otherwise ``****`` followed by the last 4 characters.
+    """
+    if not api_key:
+        return ""
+    return API_KEY_MASK + api_key[-4:] if len(api_key) > 8 else API_KEY_MASK
+
+
+def settings_response(settings: LLMSettings) -> "LLMSettingsResponse":
+    """Build the API response of the LLM settings with a masked API key."""
+    return LLMSettingsResponse(
+        id=settings.id,
+        provider=settings.provider,
+        api_key=mask_api_key(settings.api_key or ""),
+        model=settings.model,
+        ollama_url=settings.ollama_url,
+        updated_at=settings.updated_at,
+    )
+
+
 class LLMSettingsResponse(BaseModel):
     id: int
     provider: str
@@ -476,7 +521,7 @@ async def get_llm_settings(db: Session = Depends(get_db)):
             db.add(settings)
             db.commit()
             db.refresh(settings)
-        return settings
+        return settings_response(settings)
     except Exception as e:
         import traceback
         print(f"ERROR in get_llm_settings: {str(e)}")
@@ -495,13 +540,15 @@ async def update_llm_settings(request: LLMSettingsRequest, db: Session = Depends
             db.add(settings)
 
         settings.provider = request.provider
-        settings.api_key = request.api_key
+        # La cle masquee renvoyee par le GET (ou vide) ne remplace pas la cle stockee
+        if not request.api_key.startswith(API_KEY_MASK):
+            settings.api_key = request.api_key
         settings.model = request.model
         settings.ollama_url = request.ollama_url
 
         db.commit()
         db.refresh(settings)
-        return settings
+        return settings_response(settings)
     except Exception as e:
         import traceback
         print(f"ERROR in update_llm_settings: {str(e)}")
@@ -615,6 +662,9 @@ class LLMAnalysisRequest(BaseModel):
     job_offer_id: str
     cv_files: Optional[List[str]] = None  # Liste optionnelle de fichiers specifiques
     source_analysis_id: Optional[int] = None  # ID de l'analyse source (pour traçabilité)
+    min_years: Optional[float] = None  # fourchette d'experience (donnees WTJ), bornes incluses
+    max_years: Optional[float] = None
+    custom_prompt: str = ""  # instructions du recruteur, propres a ce lancement
 
 
 @app.post("/api/projects/{project_id}/analyze-llm")
@@ -649,13 +699,28 @@ async def analyze_with_llm(project_id: str, request: LLMAnalysisRequest, db: Ses
         if not filenames:
             raise HTTPException(status_code=400, detail="Aucun CV valide trouve dans le dossier")
 
+        # 5b. Fourchette d'experience (CVs sans donnees WTJ conserves)
+        split = wtj_import.filter_by_experience(
+            db, project_id, filenames, request.min_years, request.max_years
+        )
+        filenames = split["kept"]
+        if not filenames:
+            raise HTTPException(
+                status_code=400,
+                detail="Aucun CV dans la fourchette d'experience demandee",
+            )
+
         # 6. Creer le lot et le lancer en arriere-plan
         job = llm_jobs.create_job(
             db, project_id, request.job_offer_id, folder_path, filenames,
-            settings.provider, settings.model
+            settings.provider, settings.model, request.custom_prompt
         )
         llm_jobs.start_job(job.id, generate_llm_report)
-        return llm_jobs.job_to_dict(db, job)
+        return {
+            **llm_jobs.job_to_dict(db, job),
+            "excluded_by_experience": len(split["excluded"]),
+            "unknown_experience": len(split["unknown"]),
+        }
 
     except HTTPException:
         raise
@@ -673,6 +738,41 @@ def _get_job_or_404(db: Session, job_id: str) -> LLMJob:
     if not job:
         raise HTTPException(status_code=404, detail="Lot d'analyse non trouve")
     return job
+
+
+_EXPORT_TYPES = {
+    "html": "text/html; charset=utf-8",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "pdf": "application/pdf",
+}
+
+
+@app.get("/api/analyses/{analysis_id}/export/{fmt}")
+def export_analysis(analysis_id: int, fmt: str, db: Session = Depends(get_db)):
+    """Exporte une analyse LLM : html (autonome), xlsx (classement) ou pdf (resume)."""
+    if fmt not in _EXPORT_TYPES:
+        raise HTTPException(status_code=400, detail="Format inconnu (html, xlsx, pdf)")
+    analysis = db.get(Analysis, analysis_id)
+    if not analysis or not analysis.results:
+        raise HTTPException(status_code=404, detail="Analyse LLM non trouvee")
+    offer = db.get(JobOffer, analysis.job_offer_id) if analysis.job_offer_id else None
+    settings = analysis.keywords or {}
+    info = report_export.report_info(
+        offer.filename if offer else "", settings.get("provider", ""),
+        settings.get("model", ""), analysis.date,
+    )
+    if fmt == "html":
+        content = report_export.build_html(analysis.results, info).encode("utf-8")
+    elif fmt == "xlsx":
+        content = report_export.build_xlsx(analysis.results, info)
+    else:
+        content = report_export.build_pdf(analysis.results, info)
+    filename = f"rapport_analyse_{analysis.id}_{analysis.date:%Y%m%d_%H%M}.{fmt}"
+    return Response(
+        content=content,
+        media_type=_EXPORT_TYPES[fmt],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/api/llm-jobs/{job_id}")
@@ -742,55 +842,6 @@ async def delete_llm_job(job_id: str, db: Session = Depends(get_db)):
     return {"message": "Lot supprime"}
 
 
-def parse_llm_response(analysis_text: str) -> dict:
-    """
-    Parse le score et la recommandation depuis la reponse LLM.
-
-    Returns:
-        dict avec 'score' (int ou None), 'recommendation' (str ou None), 'analysis' (str)
-    """
-    score = None
-    recommendation = None
-
-    # Parser le score (format: "SCORE: XX/100" ou "SCORE: XX")
-    score_match = re.search(r'SCORE:\s*(\d+)\s*(?:/100)?', analysis_text, re.IGNORECASE)
-    if score_match:
-        score = int(score_match.group(1))
-        # S'assurer que le score est entre 0 et 100
-        score = max(0, min(100, score))
-
-    # Parser la recommandation
-    rec_match = re.search(r'RECOMMANDATION:\s*(RETENIR|A_REVOIR|A REVOIR|REJETER)', analysis_text, re.IGNORECASE)
-    if rec_match:
-        recommendation = rec_match.group(1).upper().replace(' ', '_')
-
-    return {
-        'score': score,
-        'recommendation': recommendation,
-        'analysis': analysis_text
-    }
-
-
-def get_recommendation_emoji(recommendation: str) -> str:
-    """Retourne l'emoji correspondant a la recommandation."""
-    emojis = {
-        'RETENIR': '✅',
-        'A_REVOIR': '⚠️',
-        'REJETER': '❌'
-    }
-    return emojis.get(recommendation, '❓')
-
-
-def get_recommendation_label(recommendation: str) -> str:
-    """Retourne le label lisible de la recommandation."""
-    labels = {
-        'RETENIR': 'Fortement recommandé',
-        'A_REVOIR': 'À considérer',
-        'REJETER': 'Non recommandé'
-    }
-    return labels.get(recommendation, 'Non évalué')
-
-
 def generate_llm_report(results: list, job_offer_name: str, provider: str, model: str) -> str:
     """Genere un rapport Markdown avec classement a partir des resultats LLM."""
 
@@ -812,8 +863,10 @@ def generate_llm_report(results: list, job_offer_name: str, provider: str, model
     # Trier par score decroissant (None a la fin)
     parsed_results.sort(key=lambda x: (x['score'] is not None, x['score'] or 0), reverse=True)
 
-    # Generer le rapport
-    report = f"""# 📊 Rapport d'Analyse IA
+    has_wtj = any(r.get("wtj") for r in successful)
+    wtj_by_file = {r["filename"]: r.get("wtj") or {} for r in successful}
+
+    report = f"""# Rapport d'Analyse IA
 
 ## Informations
 | | |
@@ -826,48 +879,49 @@ def generate_llm_report(results: list, job_offer_name: str, provider: str, model
 
 ---
 
-## 🏆 Synthèse et Classement
+## Synthèse et Classement
 
 """
 
     if parsed_results:
-        # Tableau de classement
-        report += "| Rang | Candidat | Score | Recommandation |\n"
-        report += "|:----:|----------|:-----:|----------------|\n"
+        header = "| Rang | Candidat | Score | Recommandation |"
+        sep = "|:----:|----------|:-----:|----------------|"
+        if has_wtj:
+            header += " Exp. (ans) | WTJ |"
+            sep += ":-------:|:---:|"
+        report += header + "\n" + sep + "\n"
 
         for i, r in enumerate(parsed_results, 1):
             score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
-            rec_emoji = get_recommendation_emoji(r['recommendation'])
-            rec_label = get_recommendation_label(r['recommendation'])
-            report += f"| {i} | {r['filename']} | **{score_str}** | {rec_emoji} {rec_label} |\n"
+            row = f"| {i} | {r['filename']} | **{score_str}** | {get_recommendation_label(r['recommendation'])} |"
+            if has_wtj:
+                w = wtj_by_file.get(r['filename'], {})
+                years = f"{w['years_exp']:g}" if w.get('years_exp') is not None else "-"
+                link = f"[WTJ]({w['wtj_url']})" if w.get('wtj_url') else "-"
+                row += f" {years} | {link} |"
+            report += row + "\n"
 
         report += "\n"
 
-        # Top 3 resume
-        top_3 = [r for r in parsed_results if r['score'] is not None][:3]
-        if top_3:
-            report += "### 🎯 Top 3 Profils\n\n"
-            for i, r in enumerate(top_3, 1):
-                # Extraire le resume du profil depuis l'analyse
-                resume_match = re.search(r'## Resume du Profil\s*\n(.*?)(?=\n##|\Z)', r['analysis'], re.DOTALL | re.IGNORECASE)
-                resume = resume_match.group(1).strip() if resume_match else "Profil analysé"
-                # Limiter a 150 caracteres
-                if len(resume) > 150:
-                    resume = resume[:147] + "..."
-                report += f"{i}. **{r['filename']}** ({r['score']}/100) - {resume}\n\n"
+        # Top 10 : avis court de l'IA
+        top = [r for r in parsed_results if r['score'] is not None][:10]
+        if top:
+            report += f"### Top {len(top)} des profils\n\n"
+            for i, r in enumerate(top, 1):
+                opinion = extract_short_opinion(r['analysis'])
+                report += f"{i}. **{r['filename']}** ({r['score']}/100) : {opinion}\n"
+            report += "\n"
 
         report += "\n---\n\n"
 
-        # Analyses detaillees
-        report += f"## 📄 Analyses Détaillées\n\n"
+        # Analyses detaillees (sans rang : le classement est dans le tableau)
+        report += "## Analyses Détaillées\n\n"
 
-        for i, r in enumerate(parsed_results, 1):
+        for r in parsed_results:
             score_str = f"{r['score']}/100" if r['score'] is not None else "N/A"
-            rec_emoji = get_recommendation_emoji(r['recommendation'])
-            report += f"### {i}. {r['filename']}\n\n"
-            report += f"**Score: {score_str}** | **Recommandation: {rec_emoji} {get_recommendation_label(r['recommendation'])}**\n\n"
+            report += f"### {r['filename']}\n\n"
+            report += f"**Score : {score_str}** | **Recommandation : {get_recommendation_label(r['recommendation'])}**\n\n"
 
-            # Retirer les lignes SCORE et RECOMMANDATION du texte d'analyse
             clean_analysis = re.sub(r'^SCORE:.*$', '', r['analysis'], flags=re.MULTILINE | re.IGNORECASE)
             clean_analysis = re.sub(r'^RECOMMANDATION:.*$', '', clean_analysis, flags=re.MULTILINE | re.IGNORECASE)
             clean_analysis = clean_analysis.strip()
@@ -877,9 +931,43 @@ def generate_llm_report(results: list, job_offer_name: str, provider: str, model
 
     # Erreurs
     if failed:
-        report += f"## ⚠️ Erreurs ({len(failed)} CVs)\n\n"
+        report += f"## Erreurs ({len(failed)} CVs)\n\n"
         for result in failed:
             report += f"- **{result['filename']}**: {result.get('error', 'Erreur inconnue')}\n"
         report += "\n"
 
     return report
+
+
+# ===== WTJ CANDIDATES (import CSV) =====
+
+class WtjImportRequest(BaseModel):
+    csv_path: str
+
+
+@app.post("/api/projects/{project_id}/wtj-import")
+async def import_wtj_csv(project_id: str, request: WtjImportRequest, db: Session = Depends(get_db)):
+    """Importe un export CSV Welcome to the Jungle (rapprochement par cv_fichier)."""
+    if not ProjectManager.get_project(db, project_id):
+        raise HTTPException(status_code=404, detail="Projet non trouve")
+    if not os.path.isfile(request.csv_path):
+        raise HTTPException(status_code=400, detail=f"Fichier non trouve: {request.csv_path}")
+    try:
+        return wtj_import.import_csv(db, project_id, request.csv_path)
+    except (ValueError, UnicodeDecodeError) as e:
+        raise HTTPException(status_code=400, detail=f"CSV invalide: {e}")
+
+
+@app.get("/api/projects/{project_id}/wtj-candidates")
+async def list_wtj_candidates(project_id: str, db: Session = Depends(get_db)):
+    """Liste les candidats WTJ importes pour le projet."""
+    rows = db.query(WtjCandidate).filter(WtjCandidate.project_id == project_id).all()
+    return [wtj_import.candidate_to_dict(c) for c in rows]
+
+
+@app.delete("/api/projects/{project_id}/wtj-candidates")
+async def clear_wtj_candidates(project_id: str, db: Session = Depends(get_db)):
+    """Supprime les candidats WTJ importes du projet."""
+    n = db.query(WtjCandidate).filter(WtjCandidate.project_id == project_id).delete()
+    db.commit()
+    return {"deleted": n}
