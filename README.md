@@ -256,19 +256,27 @@ Swagger UI disponible sur http://localhost:8000/docs
 
 ### Phase 3.1 - Améliorations LLM (Terminé)
 - [x] Rapport avec classement et synthèse
-- [x] Top 3 profils avec résumé
+- [x] Top profils avec résumé (Top 10 depuis la v3.4.0)
 - [x] Sélection de CVs (tous / Top N / manuel)
 - [x] Parsing automatique scores et recommandations
 
-### Phase 3.2 - Import WTJ et exports (v3.4.0)
+### Phase 3.2 - Analyses en arrière-plan (v3.3.0)
+- [x] Analyses IA en arrière-plan avec progression et reprise
+- [x] Analyse parallélisée (`LLM_CONCURRENCY`)
+- [x] Provider Azure OpenAI (Foundry)
+- [x] Rapports chargés à la demande, base de données dans le dossier utilisateur
+
+### Phase 3.3 - Import WTJ et exports (v3.4.0)
 - [x] Import CSV WTJ, fourchette d'expérience, instructions personnalisées par lancement
 - [x] Top 10 avec avis court, avis sur les réponses
 - [x] Exports HTML / Excel / PDF résumé
 - [x] Clé API masquée dans l'API, `data/` et `*.db` ignorés par git
+- [x] Tests unitaires (pytest)
 
-### Optimisations futures
-- [x] Queue/Worker pour gros batches (v3.3.0 : analyses IA en arrière-plan, progression, reprise)
-- [ ] Tests unitaires
+### Prochaines versions
+- [ ] v3.5.0 : robustesse Electron (port dynamique, arrêt propre du backend, fichier de log, bannière de perte de connexion), découpage du bundle JS, correction de la version affichée au démarrage
+- [ ] v3.6.0 : fiabilisation du score IA (grille avec preuves, plusieurs passes, anonymisation optionnelle)
+- [ ] Plus tard : OCR des PDF scannés, réduction du coût des prompts, signature de l'exe, import Excel WTJ
 - [ ] CI/CD pipeline
 
 ## Licence
