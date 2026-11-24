@@ -2,6 +2,7 @@ const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
+const net = require('net');
 
 // ========================================
 // SQUIRREL STARTUP (Windows installer)
@@ -33,6 +34,9 @@ const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 let mainWindow;
 let splashWindow;
 let backendProcess;
+// Port du backend : fixe en dev (proxy Vite), libre en production
+const DEV_BACKEND_PORT = 8000;
+let backendPort = DEV_BACKEND_PORT;
 
 // Mode dev ou production
 const isDev = !app.isPackaged;
@@ -46,13 +50,31 @@ function log(message) {
   console.log(`[Main] ${message}`);
 }
 
+// Demande un port libre au systeme
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+// Le preload lit le port de facon synchrone pour configurer l'URL de l'API
+ipcMain.on('get-backend-port', (event) => {
+  event.returnValue = backendPort;
+});
+
 // Fonction pour verifier si le backend est pret
 function checkBackendReady() {
   return new Promise((resolve) => {
     const check = () => {
       const req = http.request({
         hostname: '127.0.0.1',
-        port: 8000,
+        port: backendPort,
         path: '/api/health',
         method: 'GET',
         timeout: 1000
@@ -129,7 +151,7 @@ function startBackend() {
     if (isDev) {
       // En dev : lance Python directement
       backendPath = 'python';
-      args = ['-m', 'uvicorn', 'src.services.api:app', '--port', '8000'];
+      args = ['-m', 'uvicorn', 'src.services.api:app', '--port', String(backendPort)];
       log(`Dev mode: ${backendPath} ${args.join(' ')}`);
     } else {
       // En production : lance l'exe PyInstaller
@@ -155,6 +177,7 @@ function startBackend() {
 
     backendProcess = spawn(backendPath, args, {
       cwd: isDev ? rootPath : undefined,
+      env: { ...process.env, CV_BACKEND_PORT: String(backendPort) },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true
     });
@@ -274,7 +297,9 @@ app.whenReady().then(async () => {
     await createSplashWindow();
     log('Splash affiche');
 
-    // 2. Lancer le backend (sans attendre qu'il soit pret)
+    // 2. Choisir le port puis lancer le backend (sans attendre qu'il soit pret)
+    backendPort = isDev ? DEV_BACKEND_PORT : await findFreePort();
+    log(`Port du backend: ${backendPort}`);
     startBackend();
     log('Backend lance');
 
