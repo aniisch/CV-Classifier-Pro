@@ -19,6 +19,7 @@ import JobOfferUpload from './JobOfferUpload';
 import JobOfferList from './JobOfferList';
 import JobOfferEdit from './JobOfferEdit';
 import { apiUrl } from '../config';
+import useBackendStatus from '../hooks/useBackendStatus';
 
 function App() {
   const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor', 'jobofferupload', 'jobofferedit'
@@ -29,6 +30,7 @@ function App() {
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [jobOffers, setJobOffers] = useState([]);
   const [editingJobOffer, setEditingJobOffer] = useState(null);
+  const backendOnline = useBackendStatus();
 
   // Charger les offres d'emploi quand on entre dans l'analyzer
   useEffect(() => {
@@ -178,6 +180,17 @@ function App() {
 
   return (
     <>
+      {!backendOnline && (
+        <Alert
+          severity="error"
+          variant="filled"
+          sx={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 2000, borderRadius: 0 }}
+        >
+          Connexion au serveur perdue. Reconnexion en cours... Si le message persiste,
+          redemarrez l'application (les logs sont dans %APPDATA%\CV Classifier Pro\logs).
+        </Alert>
+      )}
+
       {screen === 'home' && (
         <HomeScreen onProjectSelect={handleProjectSelect} />
       )}
