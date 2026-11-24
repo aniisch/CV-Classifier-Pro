@@ -1,6 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const http = require('http');
 const net = require('net');
 
@@ -178,6 +178,8 @@ function startBackend() {
     backendProcess = spawn(backendPath, args, {
       cwd: isDev ? rootPath : undefined,
       env: { ...process.env, CV_BACKEND_PORT: String(backendPort) },
+      detached: process.platform !== 'win32',
+      windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true
     });
@@ -199,6 +201,7 @@ function startBackend() {
 
     backendProcess.on('close', (code) => {
       log(`Backend ferme avec code: ${code}`);
+      backendProcess = null;
     });
 
     // Resoudre immediatement, on verifiera avec checkBackendReady
@@ -207,16 +210,22 @@ function startBackend() {
 }
 
 function stopBackend() {
-  if (backendProcess) {
-    log('Arret du backend...');
+  if (!backendProcess) return;
+  const { pid } = backendProcess;
+  backendProcess = null;
+  log(`Arret du backend (pid ${pid})...`);
 
+  try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', backendProcess.pid, '/f', '/t']);
+      // spawnSync : l'arret doit etre termine avant la sortie d'Electron
+      // /t tue tout l'arbre (bootloader PyInstaller et processus enfants)
+      spawnSync('taskkill', ['/pid', String(pid), '/f', '/t'], { windowsHide: true });
     } else {
-      backendProcess.kill('SIGTERM');
+      // Le backend est lance dans son propre groupe de processus
+      process.kill(-pid, 'SIGTERM');
     }
-
-    backendProcess = null;
+  } catch (err) {
+    log(`Arret du backend impossible: ${err.message}`);
   }
 }
 
@@ -360,6 +369,20 @@ app.on('before-quit', () => {
 
 app.on('quit', () => {
   stopBackend();
+});
+
+// Securite : ne jamais laisser le backend orphelin
+process.on('exit', stopBackend);
+['SIGINT', 'SIGTERM'].forEach((signal) => {
+  process.on(signal, () => {
+    stopBackend();
+    app.quit();
+  });
+});
+process.on('uncaughtException', (err) => {
+  log(`Exception non geree: ${err.stack || err.message}`);
+  stopBackend();
+  app.exit(1);
 });
 
 // IPC : Ouvrir le dialog de selection de dossier
