@@ -148,6 +148,12 @@ Variables d'environnement (optionnelles) :
 | `AZURE_OPENAI_REASONING` | `0` / `1` : force le mode raisonnement (sinon déduit du nom : hors `gpt-4*`, `gpt-35*`, `gpt-3.5*`) | auto |
 | `LLM_CONCURRENCY` | Nombre d'analyses de CV en parallèle | `1` (Ollama), `8` (cloud) |
 
+## Logs et dépannage
+
+L'application desktop écrit ses logs (Electron et backend) dans
+`%APPDATA%\CV Classifier Pro\logs\app.log`. Le fichier est tourné à 2 Mo (`app.log.1`, `app.log.2`).
+Joignez-le lors d'un signalement de bug. Il ne contient pas les clés API.
+
 ## Structure du Projet
 
 ```

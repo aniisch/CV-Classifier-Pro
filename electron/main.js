@@ -3,6 +3,7 @@ const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const http = require('http');
 const net = require('net');
+const { createLogger } = require('./logger');
 
 // ========================================
 // SQUIRREL STARTUP (Windows installer)
@@ -46,8 +47,12 @@ const rootPath = isDev
   ? path.join(__dirname, '..')
   : path.join(process.resourcesPath);
 
+// Logs dans %APPDATA%\\CV Classifier Pro\\logs (meme dossier parent que la base de donnees)
+const fileLogger = createLogger(path.join(app.getPath('appData'), 'CV Classifier Pro', 'logs'));
+
 function log(message) {
   console.log(`[Main] ${message}`);
+  fileLogger.write(`[Main] ${message}`);
 }
 
 // Demande un port libre au systeme
@@ -186,12 +191,12 @@ function startBackend() {
 
     backendProcess.stdout.on('data', (data) => {
       const output = data.toString();
-      log(`Backend: ${output}`);
+      log(`Backend: ${output.trimEnd()}`);
     });
 
     backendProcess.stderr.on('data', (data) => {
       const output = data.toString();
-      log(`Backend stderr: ${output}`);
+      log(`Backend stderr: ${output.trimEnd()}`);
     });
 
     backendProcess.on('error', (err) => {
