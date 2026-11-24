@@ -103,6 +103,9 @@ Puis continue avec l'analyse detaillee:
 ## Resume du Profil
 (2-3 phrases resumant le candidat et son adequation au poste)
 
+## Avis court
+(1-2 phrases : ton avis tranche sur ce candidat pour ce poste)
+
 ## Points Forts
 - Liste les competences et experiences qui correspondent bien a l'offre
 - Mentionne les atouts distinctifs

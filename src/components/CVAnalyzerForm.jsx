@@ -40,6 +40,11 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysisStart }) => {
   const [folderPath, setFolderPath] = useState('');
   const [error, setError] = useState('');
+  const [wtjInfo, setWtjInfo] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [minYears, setMinYears] = useState('');
+  const [maxYears, setMaxYears] = useState('');
+  const [expNote, setExpNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [analysisMode, setAnalysisMode] = useState('keywords'); // 'keywords', 'joboffer' ou 'llm'
   const [selectedJobOfferId, setSelectedJobOfferId] = useState('');
@@ -99,7 +104,7 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
         setJob(null);
         setLoading(false);
         if (data.status === 'completed') {
-          onCompleteRef.current?.({ report: data.report, results: data.results });
+          onCompleteRef.current?.({ report: data.report, results: data.results, analysis_id: data.analysis_id });
         } else {
           onCompleteRef.current?.(null);
           if (data.status === 'failed') {
@@ -214,12 +219,7 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
         const response = await fetch(apiUrl(`/api/projects/${project.id}/analyses`));
         if (response.ok) {
           const data = await response.json();
-          // Filtrer pour garder uniquement les analyses non-LLM (mots-cles ou offre)
-          const nonLlmAnalyses = data.filter(a => {
-            const kw = a.keywords || {};
-            return kw.mode !== 'llm';
-          });
-          setPreviousAnalyses(nonLlmAnalyses);
+          setPreviousAnalyses(data);
         }
       } catch (err) {
         console.error('Erreur chargement analyses:', err);
@@ -240,9 +240,9 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
     if (!analysis) return;
 
     // Extraire les CVs du rapport markdown
-    // Le format est: | 1 | filename.pdf | XX% | ...
+    // Formats: | 1 | filename.pdf | XX% | ...  ou (analyse IA) | 1 | filename.pdf | **XX/100** | ...
     const report = analysis.report || '';
-    const cvRegex = /\|\s*\d+\s*\|\s*([^|]+\.pdf)\s*\|\s*([\d.]+)%?\s*\|/gi;
+    const cvRegex = /\|\s*\d+\s*\|\s*([^|]+\.pdf)\s*\|\s*\**([\d.]+)(?:%|\/100)?\**\s*\|/gi;
     const cvs = [];
     let match;
 
@@ -329,6 +329,9 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
         body = {
           folder_path: folderPath,
           job_offer_id: selectedJobOfferId,
+          custom_prompt: customPrompt,
+          min_years: minYears === '' ? null : Number(minYears),
+          max_years: maxYears === '' ? null : Number(maxYears),
           // Ajouter cv_files si mode selection (pas 'all')
           ...(cvSelectionMode !== 'all' && selectedCvs.length > 0 && {
             cv_files: selectedCvs,
@@ -351,6 +354,9 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
       const data = await response.json();
       if (analysisMode === 'llm') {
         // Lot cree : le suivi se fait par polling, loading reste actif
+        setExpNote(data.excluded_by_experience || data.unknown_experience
+          ? `${data.excluded_by_experience} CV(s) hors fourchette exclus, ${data.unknown_experience} sans donnée d'expérience conservés.`
+          : '');
         setJob(data);
         pollJob(data.id);
         return;
@@ -374,6 +380,44 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
       }
     } else {
       setError('Tapez le chemin du dossier manuellement');
+    }
+  };
+
+  const loadWtjCount = useCallback(async () => {
+    try {
+      const r = await fetch(apiUrl(`/api/projects/${project.id}/wtj-candidates`));
+      if (r.ok) {
+        const list = await r.json();
+        setWtjInfo(list.length ? `${list.length} candidats WTJ importes` : '');
+      }
+    } catch (err) {
+      console.error('Erreur chargement WTJ:', err);
+    }
+  }, [project.id]);
+
+  useEffect(() => { loadWtjCount(); }, [loadWtjCount]);
+
+  const handleImportWtj = async () => {
+    let csvPath = null;
+    if (window.electronAPI?.selectFile) {
+      csvPath = await window.electronAPI.selectFile({
+        filters: [{ name: 'CSV', extensions: ['csv'] }]
+      });
+    } else {
+      csvPath = window.prompt('Chemin du fichier CSV WTJ');
+    }
+    if (!csvPath) return;
+    try {
+      const r = await fetch(apiUrl(`/api/projects/${project.id}/wtj-import`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv_path: csvPath })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Import impossible');
+      await loadWtjCount();
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -417,6 +461,13 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
           >
             Parcourir
           </Button>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <Button variant="outlined" onClick={handleImportWtj} disabled={loading}>
+            Importer CSV WTJ
+          </Button>
+          {wtjInfo && <Typography variant="body2" color="text.secondary">{wtjInfo}</Typography>}
         </Box>
 
         <Divider sx={{ my: 2 }} />
@@ -586,7 +637,9 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
                   >
                     {previousAnalyses.map((analysis) => (
                       <MenuItem key={analysis.id} value={analysis.id}>
-                        {new Date(analysis.date).toLocaleDateString('fr-FR')} - {Object.keys(analysis.keywords || {}).length} critères
+                        {new Date(analysis.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} - {(analysis.keywords || {}).mode === 'llm'
+                          ? `Analyse IA (${analysis.keywords.model || analysis.keywords.provider})`
+                          : `${Object.keys(analysis.keywords || {}).length} critères`}
                       </MenuItem>
                     ))}
                   </Select>
@@ -714,6 +767,47 @@ const CVAnalyzerForm = ({ project, jobOffers = [], onAnalysisComplete, onAnalysi
               value={job.total ? (job.done / job.total) * 100 : 0}
             />
           </Box>
+        )}
+
+        {analysisMode === 'llm' && !job && wtjInfo && (
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              type="number"
+              label="Expérience min (ans)"
+              value={minYears}
+              onChange={(e) => setMinYears(e.target.value)}
+              inputProps={{ min: 0, step: 0.5 }}
+              disabled={loading}
+            />
+            <TextField
+              type="number"
+              label="Expérience max (ans)"
+              value={maxYears}
+              onChange={(e) => setMaxYears(e.target.value)}
+              inputProps={{ min: 0, step: 0.5 }}
+              helperText="Les CVs hors fourchette ne sont pas analysés"
+              disabled={loading}
+            />
+          </Box>
+        )}
+
+        {expNote && <Alert severity="info" sx={{ mb: 2 }}>{expNote}</Alert>}
+
+        {analysisMode === 'llm' && !job && (
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            label="Instructions personnalisées (optionnel)"
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder="Ex : privilégie l'expérience Azure. Compare les réponses du candidat (CSV WTJ) avec son CV."
+            helperText={wtjInfo
+              ? 'Valable pour ce lancement uniquement. Les données du CSV WTJ sont transmises à l\'IA.'
+              : 'Valable pour ce lancement uniquement.'}
+            disabled={loading}
+            sx={{ mb: 2 }}
+          />
         )}
 
         {/* Info mode LLM */}

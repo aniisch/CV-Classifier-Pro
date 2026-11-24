@@ -54,6 +54,7 @@ function App() {
     setLoading(false);
     if (data && data.report) {
       setReport(data.report);
+      setSelectedAnalysis(data.analysis_id ?? null);
       setError(null);
     } else {
       setError('Format de reponse invalide');
@@ -93,7 +94,7 @@ function App() {
 
       const opt = {
         margin: 1,
-        filename: `rapport_analyse_${selectedAnalysis}_${dateStr}_${timeStr}.pdf`,
+        filename: `rapport_analyse_${selectedAnalysis ? `${selectedAnalysis}_` : ''}${dateStr}_${timeStr}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2 },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -103,6 +104,27 @@ function App() {
     } catch (error) {
       setError('Erreur lors de l\'export en PDF');
       console.error('Erreur:', error);
+    }
+  };
+
+  const handleExportFile = async (format) => {
+    try {
+      const response = await fetch(apiUrl(`/api/analyses/${selectedAnalysis}/export/${format}`));
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || 'Export impossible');
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const name = (disposition.match(/filename="([^"]+)"/) || [])[1] || `rapport.${format}`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Erreur lors de l'export : ${err.message}`);
     }
   };
 
@@ -217,6 +239,7 @@ function App() {
                 <AnalysisReport
                   report={report}
                   onExportPDF={handleExportPDF}
+                  onExportFile={selectedAnalysis ? handleExportFile : null}
                 />
               </Paper>
             )}

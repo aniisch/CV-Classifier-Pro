@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 import uuid
 
@@ -68,6 +68,7 @@ class LLMJob(Base):
     # 'running', 'completed', 'cancelled', 'interrupted', 'failed'
     status = Column(String, default="running")
     error = Column(String, default="")
+    custom_prompt = Column(String, default="")  # instructions du recruteur pour ce lancement
     analysis_id = Column(Integer, ForeignKey('analyses.id'), nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -83,3 +84,25 @@ class LLMJobItem(Base):
     filename = Column(String, nullable=False)
     status = Column(String, default="pending")  # 'pending', 'ok', 'error'
     result = Column(JSON, nullable=True)  # meme format que les anciens results
+
+
+class WtjCandidate(Base):
+    """Candidat importe depuis un export Welcome to the Jungle, rattache a un projet."""
+    __tablename__ = "wtj_candidates"
+    __table_args__ = (UniqueConstraint("project_id", "cv_fichier", name="uq_wtj_project_cv"),)
+
+    id = Column(Integer, primary_key=True)
+    project_id = Column(String, ForeignKey('projects.id', ondelete="CASCADE"), nullable=False, index=True)
+    cv_fichier = Column(String, nullable=False)  # nom du PDF, cle de rapprochement
+    reference = Column(String, default="")
+    first_name = Column(String, default="")
+    last_name = Column(String, default="")
+    email = Column(String, default="")
+    city = Column(String, default="")
+    linkedin = Column(String, default="")
+    title = Column(String, default="")
+    years_exp = Column(Float, nullable=True)
+    exp_confidence = Column(String, default="")
+    exp_ok = Column(Boolean, nullable=True)
+    wtj_url = Column(String, default="")
+    extra = Column(JSON, default={})  # autres colonnes du CSV (reponses, flags...)

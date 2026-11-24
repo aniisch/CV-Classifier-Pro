@@ -72,6 +72,8 @@ if __name__ == "__main__":
         "--hidden-import", "pydantic",
         "--hidden-import", "sqlalchemy",
         "--hidden-import", "PyPDF2",
+        "--hidden-import", "openpyxl",
+        "--hidden-import", "reportlab",
         # Ajouter les fichiers source
         "--add-data", f"src;src",
         # Fichier d'entrée
