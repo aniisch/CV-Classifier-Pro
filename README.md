@@ -279,8 +279,14 @@ Swagger UI disponible sur http://localhost:8000/docs
 - [x] Clé API masquée dans l'API, `data/` et `*.db` ignorés par git
 - [x] Tests unitaires (pytest)
 
+### Phase 3.4 - Robustesse Electron (v3.5.0)
+- [x] Port libre pour le backend, arrêt propre du backend et de ses processus enfants
+- [x] Fichier de log avec rotation
+- [x] Bannière en cas de perte de connexion au backend
+- [x] Découpage du bundle JS et chargement à la demande
+- [x] Version réelle affichée au démarrage
+
 ### Prochaines versions
-- [ ] v3.5.0 : robustesse Electron (port dynamique, arrêt propre du backend, fichier de log, bannière de perte de connexion), découpage du bundle JS, correction de la version affichée au démarrage
 - [ ] v3.6.0 : fiabilisation du score IA (grille avec preuves, plusieurs passes, anonymisation optionnelle)
 - [ ] Plus tard : OCR des PDF scannés, réduction du coût des prompts, signature de l'exe, import Excel WTJ
 - [ ] CI/CD pipeline
