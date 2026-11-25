@@ -24,7 +24,7 @@ def run_command(cmd, cwd=None, shell=True):
 
 def build():
     print("=" * 60)
-    print("BUILD RELEASE - CV Classifier Pro v3.4.0")
+    print("BUILD RELEASE - CV Classifier Pro v3.5.0")
     print("=" * 60)
 
     root = Path(__file__).parent
@@ -67,7 +67,7 @@ print("Base de donnees prete!")
 from src.services.api import app
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("CV_BACKEND_PORT", "8000")), log_level="info")
 '''
 
     print(f"1.1 Creation du fichier d'entree: {entry_file}")

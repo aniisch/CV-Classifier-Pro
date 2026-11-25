@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Container,
   Typography,
@@ -6,19 +6,20 @@ import {
   Alert,
   Paper,
   LinearProgress,
-  Button
+  Button,
+  CircularProgress
 } from '@mui/material';
 import { ArrowBack as BackIcon } from '@mui/icons-material';
-import html2pdf from 'html2pdf.js';
 import HomeScreen from './HomeScreen';
-import ProjectEditor from './ProjectEditor';
+const ProjectEditor = lazy(() => import('./ProjectEditor'));
 import CVAnalyzerForm from './CVAnalyzerForm';
-import AnalysisReport from './AnalysisReport';
+const AnalysisReport = lazy(() => import('./AnalysisReport'));
 import AnalysisHistory from './AnalysisHistory';
-import JobOfferUpload from './JobOfferUpload';
+const JobOfferUpload = lazy(() => import('./JobOfferUpload'));
 import JobOfferList from './JobOfferList';
-import JobOfferEdit from './JobOfferEdit';
+const JobOfferEdit = lazy(() => import('./JobOfferEdit'));
 import { apiUrl } from '../config';
+import useBackendStatus from '../hooks/useBackendStatus';
 
 function App() {
   const [screen, setScreen] = useState('home'); // 'home', 'analyzer', 'editor', 'jobofferupload', 'jobofferedit'
@@ -29,6 +30,7 @@ function App() {
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [jobOffers, setJobOffers] = useState([]);
   const [editingJobOffer, setEditingJobOffer] = useState(null);
+  const backendOnline = useBackendStatus();
 
   // Charger les offres d'emploi quand on entre dans l'analyzer
   useEffect(() => {
@@ -100,6 +102,8 @@ function App() {
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
       };
 
+      // Chargee a la demande : html2pdf et ses dependances sont lourdes
+      const { default: html2pdf } = await import('html2pdf.js');
       await html2pdf().set(opt).from(element).save();
     } catch (error) {
       setError('Erreur lors de l\'export en PDF');
@@ -177,7 +181,24 @@ function App() {
   };
 
   return (
-    <>
+    <Suspense
+      fallback={
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      }
+    >
+      {!backendOnline && (
+        <Alert
+          severity="error"
+          variant="filled"
+          sx={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 2000, borderRadius: 0 }}
+        >
+          Connexion au serveur perdue. Reconnexion en cours... Si le message persiste,
+          redemarrez l'application (les logs sont dans %APPDATA%\CV Classifier Pro\logs).
+        </Alert>
+      )}
+
       {screen === 'home' && (
         <HomeScreen onProjectSelect={handleProjectSelect} />
       )}
@@ -294,7 +315,7 @@ function App() {
           </Container>
         </Box>
       )}
-    </>
+    </Suspense>
   );
 }
 

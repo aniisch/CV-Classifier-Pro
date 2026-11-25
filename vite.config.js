@@ -22,7 +22,14 @@ export default defineConfig({
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        manualChunks: undefined
+        // Separe les grosses dependances pour un meilleur cache et un chargement plus rapide
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@mui/icons-material')) return 'mui-icons';
+          if (/node_modules\/(@mui|@emotion)\//.test(id)) return 'mui';
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
+          return undefined;
+        }
       }
     }
   }

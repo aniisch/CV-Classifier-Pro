@@ -133,8 +133,12 @@
     <p class="status" id="status">Demarrage du serveur...</p>
   </div>
 
-  <p class="version">Version 2.1.0</p>
+  <p class="version" id="version"></p>
 
+  <script>
+    const appVersion = new URLSearchParams(window.location.search).get('version');
+    document.getElementById('version').textContent = appVersion ? `Version ${appVersion}` : '';
+  </script>
   <script>
     const messages = [
       'Demarrage du serveur...',

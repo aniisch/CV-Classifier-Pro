@@ -1,7 +1,9 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const http = require('http');
+const net = require('net');
+const { createLogger } = require('./logger');
 
 // ========================================
 // SQUIRREL STARTUP (Windows installer)
@@ -33,6 +35,9 @@ const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
 let mainWindow;
 let splashWindow;
 let backendProcess;
+// Port du backend : fixe en dev (proxy Vite), libre en production
+const DEV_BACKEND_PORT = 8000;
+let backendPort = DEV_BACKEND_PORT;
 
 // Mode dev ou production
 const isDev = !app.isPackaged;
@@ -42,9 +47,31 @@ const rootPath = isDev
   ? path.join(__dirname, '..')
   : path.join(process.resourcesPath);
 
+// Logs dans %APPDATA%\\CV Classifier Pro\\logs (meme dossier parent que la base de donnees)
+const fileLogger = createLogger(path.join(app.getPath('appData'), 'CV Classifier Pro', 'logs'));
+
 function log(message) {
   console.log(`[Main] ${message}`);
+  fileLogger.write(`[Main] ${message}`);
 }
+
+// Demande un port libre au systeme
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+// Le preload lit le port de facon synchrone pour configurer l'URL de l'API
+ipcMain.on('get-backend-port', (event) => {
+  event.returnValue = backendPort;
+});
 
 // Fonction pour verifier si le backend est pret
 function checkBackendReady() {
@@ -52,7 +79,7 @@ function checkBackendReady() {
     const check = () => {
       const req = http.request({
         hostname: '127.0.0.1',
-        port: 8000,
+        port: backendPort,
         path: '/api/health',
         method: 'GET',
         timeout: 1000
@@ -115,7 +142,7 @@ function createSplashWindow() {
       splashWindow = null;
     });
 
-    splashWindow.loadFile(splashPath);
+    splashWindow.loadFile(splashPath, { query: { version: app.getVersion() } });
   });
 }
 
@@ -129,7 +156,7 @@ function startBackend() {
     if (isDev) {
       // En dev : lance Python directement
       backendPath = 'python';
-      args = ['-m', 'uvicorn', 'src.services.api:app', '--port', '8000'];
+      args = ['-m', 'uvicorn', 'src.services.api:app', '--port', String(backendPort)];
       log(`Dev mode: ${backendPath} ${args.join(' ')}`);
     } else {
       // En production : lance l'exe PyInstaller
@@ -155,18 +182,26 @@ function startBackend() {
 
     backendProcess = spawn(backendPath, args, {
       cwd: isDev ? rootPath : undefined,
+      env: {
+        ...process.env,
+        CV_BACKEND_PORT: String(backendPort),
+        // Le backend quitte si Electron disparait (pipe stdin ferme), meme apres un crash
+        CV_EXIT_WHEN_STDIN_CLOSES: '1'
+      },
+      detached: process.platform !== 'win32',
+      windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true
     });
 
     backendProcess.stdout.on('data', (data) => {
       const output = data.toString();
-      log(`Backend: ${output}`);
+      log(`Backend: ${output.trimEnd()}`);
     });
 
     backendProcess.stderr.on('data', (data) => {
       const output = data.toString();
-      log(`Backend stderr: ${output}`);
+      log(`Backend stderr: ${output.trimEnd()}`);
     });
 
     backendProcess.on('error', (err) => {
@@ -176,6 +211,7 @@ function startBackend() {
 
     backendProcess.on('close', (code) => {
       log(`Backend ferme avec code: ${code}`);
+      backendProcess = null;
     });
 
     // Resoudre immediatement, on verifiera avec checkBackendReady
@@ -184,16 +220,22 @@ function startBackend() {
 }
 
 function stopBackend() {
-  if (backendProcess) {
-    log('Arret du backend...');
+  if (!backendProcess) return;
+  const { pid } = backendProcess;
+  backendProcess = null;
+  log(`Arret du backend (pid ${pid})...`);
 
+  try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', backendProcess.pid, '/f', '/t']);
+      // spawnSync : l'arret doit etre termine avant la sortie d'Electron
+      // /t tue tout l'arbre (bootloader PyInstaller et processus enfants)
+      spawnSync('taskkill', ['/pid', String(pid), '/f', '/t'], { windowsHide: true });
     } else {
-      backendProcess.kill('SIGTERM');
+      // Le backend est lance dans son propre groupe de processus
+      process.kill(-pid, 'SIGTERM');
     }
-
-    backendProcess = null;
+  } catch (err) {
+    log(`Arret du backend impossible: ${err.message}`);
   }
 }
 
@@ -274,7 +316,9 @@ app.whenReady().then(async () => {
     await createSplashWindow();
     log('Splash affiche');
 
-    // 2. Lancer le backend (sans attendre qu'il soit pret)
+    // 2. Choisir le port puis lancer le backend (sans attendre qu'il soit pret)
+    backendPort = isDev ? DEV_BACKEND_PORT : await findFreePort();
+    log(`Port du backend: ${backendPort}`);
     startBackend();
     log('Backend lance');
 
@@ -335,6 +379,20 @@ app.on('before-quit', () => {
 
 app.on('quit', () => {
   stopBackend();
+});
+
+// Securite : ne jamais laisser le backend orphelin
+process.on('exit', stopBackend);
+['SIGINT', 'SIGTERM'].forEach((signal) => {
+  process.on(signal, () => {
+    stopBackend();
+    app.exit(0);
+  });
+});
+process.on('uncaughtException', (err) => {
+  log(`Exception non geree: ${err.stack || err.message}`);
+  stopBackend();
+  app.exit(1);
 });
 
 // IPC : Ouvrir le dialog de selection de dossier
