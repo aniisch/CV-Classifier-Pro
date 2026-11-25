@@ -34,6 +34,27 @@ import re
 app = FastAPI()
 
 
+def _exit_when_stdin_closes() -> None:
+    """Quitte quand le processus parent disparait.
+
+    Electron lance le backend avec un pipe sur stdin : si Electron meurt (meme brutalement),
+    le pipe se ferme et le backend ne reste pas orphelin. Actif uniquement si
+    CV_EXIT_WHEN_STDIN_CLOSES=1.
+    """
+    import sys
+    import threading
+
+    def watch() -> None:
+        try:
+            while sys.stdin.buffer.read(1024):
+                pass
+        except (OSError, ValueError):
+            pass
+        os._exit(0)
+
+    threading.Thread(target=watch, name="parent-watchdog", daemon=True).start()
+
+
 def _ensure_columns() -> None:
     """Ajoute les colonnes apparues apres la creation de la base (create_all ne le fait pas)."""
     from sqlalchemy import inspect, text
@@ -45,6 +66,8 @@ def _ensure_columns() -> None:
 @app.on_event("startup")
 def init_database_and_jobs():
     """Cree les tables manquantes et marque les lots LLM laisses 'running' comme interrompus."""
+    if os.environ.get("CV_EXIT_WHEN_STDIN_CLOSES") == "1":
+        _exit_when_stdin_closes()
     Base.metadata.create_all(bind=engine)
     _ensure_columns()
     db = SessionLocal()

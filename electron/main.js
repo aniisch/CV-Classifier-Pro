@@ -182,7 +182,12 @@ function startBackend() {
 
     backendProcess = spawn(backendPath, args, {
       cwd: isDev ? rootPath : undefined,
-      env: { ...process.env, CV_BACKEND_PORT: String(backendPort) },
+      env: {
+        ...process.env,
+        CV_BACKEND_PORT: String(backendPort),
+        // Le backend quitte si Electron disparait (pipe stdin ferme), meme apres un crash
+        CV_EXIT_WHEN_STDIN_CLOSES: '1'
+      },
       detached: process.platform !== 'win32',
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -381,7 +386,7 @@ process.on('exit', stopBackend);
 ['SIGINT', 'SIGTERM'].forEach((signal) => {
   process.on(signal, () => {
     stopBackend();
-    app.quit();
+    app.exit(0);
   });
 });
 process.on('uncaughtException', (err) => {
