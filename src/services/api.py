@@ -41,14 +41,15 @@ def _exit_when_stdin_closes() -> None:
     le pipe se ferme et le backend ne reste pas orphelin. Actif uniquement si
     CV_EXIT_WHEN_STDIN_CLOSES=1.
     """
-    import sys
     import threading
 
     def watch() -> None:
+        # Lecture sur le descripteur brut : sys.stdin garderait un verrou et ferait
+        # planter l'arret normal de l'interpreteur ("could not acquire lock ... daemon threads")
         try:
-            while sys.stdin.buffer.read(1024):
+            while os.read(0, 1024):
                 pass
-        except (OSError, ValueError):
+        except OSError:
             pass
         os._exit(0)
 
