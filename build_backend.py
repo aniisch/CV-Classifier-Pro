@@ -7,6 +7,8 @@ import subprocess
 import shutil
 from pathlib import Path
 
+from build_checks import check_no_database, remove_stale_backend_databases
+
 def build():
     print("=" * 50)
     print("BUILD BACKEND - CV Classifier Pro")
@@ -14,6 +16,9 @@ def build():
 
     # Chemin racine du projet
     root = Path(__file__).parent
+
+    if not check_no_database(root):
+        return False
 
     # Créer le fichier d'entrée pour PyInstaller
     entry_file = root / "backend_entry.py"
@@ -102,14 +107,8 @@ if __name__ == "__main__":
             shutil.copy(backend_bin, electron_backend / "backend")
             print(f"   Copié: {electron_backend / 'backend'}")
 
-    # Copier la base de données
-    print("4. Copie de la base de données...")
-    db_src = root / "src" / "database" / "analyses.db"
-    if db_src.exists():
-        shutil.copy(db_src, electron_backend / "analyses.db")
-        print(f"   Copié: {electron_backend / 'analyses.db'}")
-    else:
-        print("   Base de données non trouvée, elle sera créée au premier lancement")
+    # La base vit dans le dossier utilisateur : ne jamais en embarquer une
+    remove_stale_backend_databases(electron_backend)
 
     # Nettoyer
     print("5. Nettoyage...")

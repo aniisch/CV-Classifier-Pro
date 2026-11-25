@@ -13,6 +13,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from build_checks import check_no_database, remove_stale_backend_databases
+
 def run_command(cmd, cwd=None, shell=True):
     """Execute une commande et affiche la sortie"""
     print(f"\n> {cmd if isinstance(cmd, str) else ' '.join(cmd)}")
@@ -32,6 +34,10 @@ def build():
     # Vérifier qu'on est dans le bon dossier
     if not (root / "package.json").exists():
         print("ERREUR: package.json non trouvé. Exécutez ce script depuis la racine du projet.")
+        return False
+
+    # Aucune base de donnees ne doit partir dans l'exe
+    if not check_no_database(root):
         return False
 
     # Étape 1: Build du backend Python
@@ -112,6 +118,7 @@ if __name__ == "__main__":
     print("1.3 Copie du backend dans electron/backend/...")
     electron_backend = root / "electron" / "backend"
     electron_backend.mkdir(parents=True, exist_ok=True)
+    remove_stale_backend_databases(electron_backend)
 
     if sys.platform == "win32":
         backend_exe = root / "dist" / "backend.exe"

@@ -23,6 +23,7 @@ module.exports = {
       /^\/release/,
       /^\/build_release\.py$/,
       /^\/build_backend\.py$/,
+      /^\/build_checks\.py$/,
       /^\/data/,
       /^\/tests/,
       /^\/\.github/,
